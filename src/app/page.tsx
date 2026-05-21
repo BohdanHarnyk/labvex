@@ -119,7 +119,7 @@ export default function LandingPage() {
               <ul className="space-y-3 text-gray-600 text-sm">
                 <li><strong className="text-gray-900">ZK-Passport:</strong> Підтвердження PhD або досвіду через Zero-Knowledge без розкриття персони.</li>
                 <li><strong className="text-gray-900">Reputation Score (SBT):</strong> Вага в ком’юніті майниться через огляди та успішні досліди.</li>
-                <li><strong className="text-gray-900">Reputation Decay:</strong> Період напіврозпаду (18 місяців) змушує залишатися активними.</li>
+                <li><strong className="text-gray-900">Reputation Decay:</strong> Період напіврозпаду (180 днів) змушує залишатися активними.</li>
               </ul>
             </div>
 

@@ -12,6 +12,8 @@ export interface UserProfileData {
   twitter: string;
   github: string;
   portfolio: { title: string; url: string }[];
+  customCategories?: string[];
+  customTags?: string[];
 }
 
 interface AuthContextType {
@@ -54,6 +56,8 @@ const AuthContext = createContext<AuthContextType>({
     twitter: "",
     github: "",
     portfolio: [],
+    customCategories: [],
+    customTags: [],
   },
   loginWithGoogle: () => {},
   onboardCitizen: () => {},
@@ -90,6 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     twitter: "",
     github: "",
     portfolio: [],
+    customCategories: [],
+    customTags: [],
   });
   const [isInitializing, setIsInitializing] = useState(true);
 
@@ -157,6 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         twitter: "",
         github: "",
         portfolio: [],
+        customCategories: [],
+        customTags: [],
       });
     }
   }, [connected, isGoogleLoggedIn, isInitializing]);
@@ -177,6 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       portfolio: [
         { title: "Analysis of EHD Thrust Anomaly", url: "https://labvex.org/docs/ehd_analysis.pdf" }
       ],
+      customCategories: ["Propulsion", "Quantum", "Data Analysis"],
+      customTags: ["ehd", "thrust", "citizen-science"],
     });
   };
 
@@ -196,6 +206,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         { title: "Observation of Anomalous Thrust in Asymmetric Capacitors", url: "https://labvex.org/docs/anomalous_thrust.pdf" },
         { title: "Biefeld-Brown Effect under Extreme Vacuum Conditions", url: "https://labvex.org/docs/extreme_vacuum.pdf" }
       ],
+      customCategories: ["Propulsion", "Quantum", "Vacuum Tech"],
+      customTags: ["ehd", "asymmetric-capacitors", "biefeld-brown"],
     });
   };
 
@@ -210,6 +222,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       portfolio: [
         { title: "Vexy AI Auditor Node SDK", url: "https://github.com/labvex/vexy-auditor-sdk" }
       ],
+      customCategories: ["Hardware", "Software", "AI Agents"],
+      customTags: ["smart-contracts", "solana", "ai-agents"],
     });
   };
 
@@ -225,6 +239,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       portfolio: [
         { title: "Calibration Logs: 10^-7 Torr Vacuum chambers", url: "https://labvex.org/labs/munich_calib.pdf" }
       ],
+      customCategories: ["Vacuum Tech", "Quantum", "Hardware"],
+      customTags: ["vacuum-chamber", "calibration", "telemetry"],
     });
   };
 
@@ -239,6 +255,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       portfolio: [
         { title: "2026 Sovereign Science R&D Grants Portfolio", url: "https://labvex.org/grants/portfolio2026.pdf" }
       ],
+      customCategories: ["Investments", "Propulsion", "IP Tokens"],
+      customTags: ["grants", "funding", "ip-tokens"],
     });
   };
 
@@ -266,6 +284,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       twitter: "",
       github: "",
       portfolio: [],
+      customCategories: [],
+      customTags: [],
     });
     localStorage.removeItem("labvex_role");
     localStorage.removeItem("labvex_reputation");

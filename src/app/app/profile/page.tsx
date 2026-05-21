@@ -4,17 +4,17 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { 
   User, ShieldCheck, Upload, Timer, Award, Activity, 
   ScanFace, CheckCircle2, LockKeyhole, Edit3, Save, X, 
-  Plus, Trash2, Globe, Sparkles 
+  Plus, Trash2, Globe, Sparkles, FolderPlus, Tag, Bookmark
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
+ 
 const Twitter = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
   </svg>
 );
-
+ 
 const Github = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
     <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.831.092-.646.35-1.086.636-1.336-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.579.688.481C19.137 20.162 22 16.418 22 12c0-5.523-4.477-10-10-10z" />
@@ -43,9 +43,27 @@ export default function ProfilePage() {
   const [editGithub, setEditGithub] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
   const [portfolioItems, setPortfolioItems] = useState<{ title: string; url: string }[]>([]);
+  
+  // Custom categories & tags state
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [customTags, setCustomTags] = useState<string[]>([]);
+  const [newCategoryInput, setNewCategoryInput] = useState("");
+  const [newTagInput, setNewTagInput] = useState("");
+
   const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
+
+  // Reputation Decay 180 days countdown (in seconds)
+  const [decaySeconds, setDecaySeconds] = useState(179 * 24 * 3600 + 23 * 3600 + 58 * 60 + 42);
  
+  // Decay countdown effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setDecaySeconds(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Sync values on entering edit mode
   useEffect(() => {
     if (profileData) {
@@ -55,6 +73,8 @@ export default function ProfilePage() {
       setEditGithub(profileData.github || "");
       setEditAvatar(profileData.avatar || "avatar1");
       setPortfolioItems(profileData.portfolio || []);
+      setCustomCategories(profileData.customCategories || []);
+      setCustomTags(profileData.customTags || []);
     }
   }, [profileData, isEditing]);
  
@@ -100,7 +120,9 @@ export default function ProfilePage() {
       twitter: editTwitter,
       github: editGithub,
       avatar: editAvatar,
-      portfolio: portfolioItems
+      portfolio: portfolioItems,
+      customCategories: customCategories,
+      customTags: customTags
     });
     setIsEditing(false);
   };
@@ -116,6 +138,40 @@ export default function ProfilePage() {
     setPortfolioItems(prev => prev.filter((_, i) => i !== index));
   };
  
+  const handleAddCategory = () => {
+    if (!newCategoryInput.trim()) return;
+    const cat = newCategoryInput.trim();
+    if (!customCategories.includes(cat)) {
+      setCustomCategories(prev => [...prev, cat]);
+    }
+    setNewCategoryInput("");
+  };
+
+  const handleRemoveCategory = (cat: string) => {
+    setCustomCategories(prev => prev.filter(c => c !== cat));
+  };
+
+  const handleAddTag = () => {
+    if (!newTagInput.trim()) return;
+    const tag = newTagInput.trim().toLowerCase().replace("#", "");
+    if (!customTags.includes(tag)) {
+      setCustomTags(prev => [...prev, tag]);
+    }
+    setNewTagInput("");
+  };
+
+  const handleRemoveTag = (tag: string) => {
+    setCustomTags(prev => prev.filter(t => t !== tag));
+  };
+
+  const formatDecayTime = (seconds: number) => {
+    const d = Math.floor(seconds / (3600 * 24));
+    const h = Math.floor((seconds % (3600 * 24)) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${d}d : ${String(h).padStart(2, '0')}h : ${String(m).padStart(2, '0')}m : ${String(s).padStart(2, '0')}s`;
+  };
+
   const renderAvatar = (avatarName: string) => {
     switch (avatarName) {
       case "avatar1": return <div className="w-full h-full bg-green-500 rounded-full flex items-center justify-center text-white text-4xl shadow-md border-2 border-white select-none">🔬</div>;
@@ -165,7 +221,7 @@ export default function ProfilePage() {
   const specData = getReputationSpecializations();
  
   return (
-    <section className="space-y-8">
+    <section className="space-y-8 pb-10">
       
       {/* Header Profile Card */}
       <div className="bg-white border border-gray-200 rounded-3xl p-8 shadow-sm flex flex-col md:flex-row items-center md:items-start gap-8 relative overflow-hidden">
@@ -268,7 +324,7 @@ export default function ProfilePage() {
               </h2>
  
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Left Col: Basics */}
+                {/* Left Col: Basics & Categories/Tags */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Display Name</label>
@@ -288,6 +344,73 @@ export default function ProfilePage() {
                       rows={3}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-green-500/20 focus:border-green-500 focus:outline-none resize-none"
                     />
+                  </div>
+
+                  {/* Categories & Tags Management in settings */}
+                  <div className="border-t border-gray-100 pt-3 space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <FolderPlus className="w-3.5 h-3.5 text-gray-400" /> Manage Categories
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <input 
+                          type="text"
+                          value={newCategoryInput}
+                          onChange={(e) => setNewCategoryInput(e.target.value)}
+                          placeholder="e.g. Bio-electromagnetics"
+                          className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900 focus:ring-1 focus:ring-green-500 flex-1"
+                        />
+                        <button 
+                          type="button"
+                          onClick={handleAddCategory}
+                          className="px-3 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-black"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pr-1">
+                        {customCategories.map(cat => (
+                          <span key={cat} className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-gray-100 text-gray-800 text-[10px] font-bold uppercase tracking-wider rounded border border-gray-200">
+                            {cat}
+                            <button type="button" onClick={() => handleRemoveCategory(cat)} className="text-gray-400 hover:text-red-500">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                        <Tag className="w-3.5 h-3.5 text-gray-400" /> Manage Specialty Tags
+                      </label>
+                      <div className="flex gap-2 mb-2">
+                        <input 
+                          type="text"
+                          value={newTagInput}
+                          onChange={(e) => setNewTagInput(e.target.value)}
+                          placeholder="e.g. vacuum-thruster"
+                          className="bg-gray-50 border border-gray-200 rounded-lg p-2 text-xs text-gray-900 focus:ring-1 focus:ring-green-500 flex-1"
+                        />
+                        <button 
+                          type="button"
+                          onClick={handleAddTag}
+                          className="px-3 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-black"
+                        >
+                          Add
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto pr-1">
+                        {customTags.map(tag => (
+                          <span key={tag} className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-green-50 text-green-700 text-[10px] font-bold rounded border border-green-150">
+                            #{tag}
+                            <button type="button" onClick={() => handleRemoveTag(tag)} className="text-green-400 hover:text-red-500">
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
  
                   <div>
@@ -339,7 +462,7 @@ export default function ProfilePage() {
                 <div className="space-y-4 flex flex-col justify-between">
                   <div>
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">R&D Publications / Portfolio links</label>
-                    <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                    <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
                       {portfolioItems.map((item, idx) => (
                         <div key={idx} className="flex items-center justify-between bg-gray-50 border border-gray-150 p-2 rounded-xl text-xs">
                           <span className="font-semibold text-gray-800 truncate mr-2" title={item.title}>{item.title}</span>
@@ -411,59 +534,120 @@ export default function ProfilePage() {
       {/* 2-Column Grid for Metrics & Verification */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Left Col: Reputation Engine */}
+        {/* Left & Middle Bento Area: Reputation Engine & Categories */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Decay Timer */}
-          <div className="bg-red-50 border border-red-100 rounded-2xl p-6 flex items-center justify-between shadow-sm">
+          {/* Decay Timer (180 days countdown ticking every second) */}
+          <div className="bg-red-50 border border-red-150 rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between shadow-sm gap-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-red-100/50 rounded-full blur-2xl -z-10" />
             <div>
-              <h3 className="font-bold text-red-900 flex items-center gap-2">
+              <h3 className="font-extrabold text-red-950 flex items-center gap-2 text-base">
                 <Timer className="w-5 h-5 text-red-500" />
-                Reputation Decay Countdown
+                Reputation Decay Countdown (180d)
               </h3>
-              <p className="text-xs text-red-700 mt-1">Publish research or complete a mission to reset the timer.</p>
+              <p className="text-xs text-red-700 mt-1 max-w-sm">
+                Publish a research telemetry dataset, start a thread, or complete a mission to reset the timer back to 180 days and prevent decay.
+              </p>
             </div>
-            <div className="text-right font-mono">
-              <div className="text-2xl font-bold text-red-600">14d : 02h : 15m</div>
-              <div className="text-[10px] uppercase font-bold text-red-400 tracking-wider">-10% Penalty imminent</div>
+            <div className="text-left sm:text-right font-mono bg-white border border-red-100/80 px-4 py-2 rounded-xl shadow-inner min-w-[200px]">
+              <div className="text-2xl font-bold text-red-600 tracking-tight">
+                {formatDecayTime(decaySeconds)}
+              </div>
+              <div className="text-[9px] uppercase font-extrabold text-red-400 tracking-widest mt-0.5">
+                -10% Penalty imminent
+              </div>
             </div>
           </div>
  
-          {/* Categories Grid */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-6">Reputation by Specialization ({roleTitle})</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
-              {specData.map((spec, i) => (
-                <div key={i} className="flex flex-col items-center">
-                  <div className="relative w-24 h-24 flex items-center justify-center mb-3">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="45" fill="none" stroke="#f3f4f6" strokeWidth="8" />
-                      <circle 
-                        cx="50" 
-                        cy="50" 
-                        r="45" 
-                        fill="none" 
-                        stroke={spec.color} 
-                        strokeWidth="8" 
-                        strokeDasharray="283" 
-                        strokeDashoffset={283 - (283 * parseFloat(spec.pct)) / 100} 
-                        strokeLinecap="round" 
-                      />
-                    </svg>
-                    <div className="absolute text-base font-bold text-gray-900 font-mono">{spec.val}</div>
+          {/* Reputation Specialties & Dynamic Category / Specialty Tags Bento Box */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Reputation Graph */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+              <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wider flex items-center gap-2">
+                <Activity className="w-4 h-4 text-green-500" /> Reputation Specialties
+              </h3>
+              <div className="grid grid-cols-3 gap-2 py-2">
+                {specData.map((spec, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <div className="relative w-16 h-16 flex items-center justify-center mb-2">
+                      <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
+                        <circle cx="50" cy="50" r="45" fill="none" stroke="#f3f4f6" strokeWidth="10" />
+                        <circle 
+                          cx="50" 
+                          cy="50" 
+                          r="45" 
+                          fill="none" 
+                          stroke={spec.color} 
+                          strokeWidth="10" 
+                          strokeDasharray="283" 
+                          strokeDashoffset={283 - (283 * parseFloat(spec.pct)) / 100} 
+                          strokeLinecap="round" 
+                        />
+                      </svg>
+                      <div className="absolute text-xs font-bold text-gray-900 font-mono">{spec.val}</div>
+                    </div>
+                    <div className="text-[10px] font-bold text-gray-700 text-center truncate w-full" title={spec.label}>
+                      {spec.label}
+                    </div>
                   </div>
-                  <div className="text-xs font-bold text-gray-700 text-center">{spec.label}</div>
-                  <div className="text-[10px] font-extrabold uppercase mt-1" style={{ color: spec.color }}>{spec.level}</div>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom categories & tags display Bento */}
+            <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
+              <div>
+                <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wider flex items-center gap-2">
+                  <Bookmark className="w-4 h-4 text-green-500" /> Specialty Categories & Tags
+                </h3>
+                
+                {/* Categories */}
+                <div className="mb-4">
+                  <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mb-2">Categories</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profileData.customCategories && profileData.customCategories.map(cat => (
+                      <span key={cat} className="px-2 py-0.5 bg-gray-50 text-gray-700 text-[10px] font-bold uppercase tracking-wider rounded border border-gray-200">
+                        {cat}
+                      </span>
+                    ))}
+                    {(!profileData.customCategories || profileData.customCategories.length === 0) && (
+                      <span className="text-xs text-gray-400 italic">No categories specified</span>
+                    )}
+                  </div>
                 </div>
-              ))}
+
+                {/* Tags */}
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase text-gray-400 tracking-wider mb-2">Specialty Tags</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {profileData.customTags && profileData.customTags.map(tag => (
+                      <span key={tag} className="px-2.5 py-0.5 bg-green-50 text-green-700 text-[10px] font-semibold rounded-md border border-green-100">
+                        #{tag}
+                      </span>
+                    ))}
+                    {(!profileData.customTags || profileData.customTags.length === 0) && (
+                      <span className="text-xs text-gray-400 italic">No tags specified</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-gray-100 text-right">
+                <button 
+                  onClick={() => setIsEditing(true)} 
+                  className="text-xs font-bold text-green-600 hover:text-green-700"
+                >
+                  Manage tags & categories &rarr;
+                </button>
+              </div>
             </div>
           </div>
         </div>
  
-        {/* Right Col: Identity & Badges */}
+        {/* Right Bento Box Area: Identity & Badges */}
         <div className="space-y-6">
           {/* Identity Upload / ZK Verification */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Identity & ZK-Proofs</h3>
+            <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wider">Identity & ZK-Proofs</h3>
             
             {!scanSuccess && !isLab && !isScientist ? (
               <div 
@@ -475,7 +659,7 @@ export default function ProfilePage() {
                     <motion.div 
                       initial={{ opacity: 0 }} 
                       animate={{ opacity: 1 }} 
-                      className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center animate-fade-in"
+                      className="absolute inset-0 bg-white/90 backdrop-blur-sm z-10 flex flex-col items-center justify-center"
                     >
                       <ScanFace className="w-8 h-8 text-green-500 mb-2 animate-pulse" />
                       <div className="text-xs font-bold text-gray-900 mb-1">Vexy AI Scanning...</div>
@@ -500,7 +684,7 @@ export default function ProfilePage() {
  
           {/* Badges (SBTs) */}
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
-            <h3 className="font-bold text-gray-900 mb-4">Soulbound Tokens (SBT)</h3>
+            <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wider">Soulbound Tokens (SBT)</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gradient-to-br from-amber-100 to-amber-50 border border-amber-200 p-4 rounded-xl flex flex-col items-center text-center shadow-sm hover:-translate-y-1 transition-transform">
                 <Award className="w-8 h-8 text-amber-500 mb-2 drop-shadow-sm" />
