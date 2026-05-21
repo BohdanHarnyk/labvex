@@ -48,7 +48,19 @@ const Comment = ({ author, role, text, timestamp, upvotes }: CommentProps) => {
   );
 };
 
-export function PostCard({ title, content, author, authorRole = "VERIFIED_PHYSICIST", txHash, children }: any) {
+export function PostCard({ 
+  title, 
+  content, 
+  author, 
+  authorRole = "VERIFIED_PHYSICIST", 
+  txHash, 
+  category, 
+  tags = [], 
+  onTagClick, 
+  onCategoryClick, 
+  onDelete, 
+  children 
+}: any) {
   const [showComments, setShowComments] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const { isAdmin, isAuthenticated, openAuthModal } = useAuth();
@@ -128,9 +140,20 @@ export function PostCard({ title, content, author, authorRole = "VERIFIED_PHYSIC
                 <CheckCircle2 className="w-3 h-3" /> {badge.text}
               </span>
             </div>
-            <div className="text-xs text-gray-500 flex items-center gap-2 mt-0.5">
+            <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2 mt-0.5">
               <span>2 hours ago</span>
               <span>•</span>
+              {category && (
+                <>
+                  <button 
+                    onClick={() => onCategoryClick?.(category)}
+                    className="hover:text-green-600 font-semibold cursor-pointer text-[10px] bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-100 transition-colors"
+                  >
+                    {category}
+                  </button>
+                  <span>•</span>
+                </>
+              )}
               <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono text-[10px]" title="Solana Transaction Hash">
                 Prior Art: {txHash}
               </span>
@@ -139,7 +162,11 @@ export function PostCard({ title, content, author, authorRole = "VERIFIED_PHYSIC
         </div>
         
         {isAdmin && (
-          <button className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Delete Post (Admin)">
+          <button 
+            onClick={onDelete}
+            className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors cursor-pointer" 
+            title="Delete Post (Admin)"
+          >
             <Trash2 className="w-4 h-4" />
           </button>
         )}
@@ -162,6 +189,20 @@ export function PostCard({ title, content, author, authorRole = "VERIFIED_PHYSIC
           </div>
         )}
       </div>
+      
+      {tags && tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mb-6">
+          {tags.map((tag: string) => (
+            <button
+              key={tag}
+              onClick={() => onTagClick?.(tag)}
+              className="text-[10px] font-bold text-gray-500 hover:text-green-600 bg-gray-50 hover:bg-green-50 px-2.5 py-1 rounded-lg border border-gray-100 hover:border-green-200/40 transition-colors cursor-pointer"
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
       
       <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-100">
         <button 
