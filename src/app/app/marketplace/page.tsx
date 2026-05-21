@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Store, Cpu, FlaskConical, Hammer, Search, Calendar, 
   DollarSign, Coins, ShieldCheck, Terminal, ArrowRight, 
-  Clock, MapPin, Truck, Settings, Sparkles, CheckCircle2 
+  Clock, MapPin, Truck, Settings, Sparkles, CheckCircle2, Plus 
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
+
 
 // Define Types
 interface AIAgent {
@@ -38,10 +39,111 @@ interface PhysicalProduct {
   stock: string;
 }
 
+interface ModerationRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  type: "AI" | "LAAS" | "GOODS";
+  data: any;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  createdAt: string;
+}
+
+const initialAiAgents: AIAgent[] = [
+  {
+    id: "ai-1",
+    name: "Quantum Simulator v4",
+    desc: "Високошвидкісний емулятор гамільтоніанів для симуляції кубітів та квантового відпалу на 128 кубітах.",
+    priceUSDC: 10,
+    priceLVEX: 45,
+    type: "Quantum Computing",
+    status: "ONLINE"
+  },
+  {
+    id: "ai-2",
+    name: "Vexy Auditor Pro",
+    desc: "Шор-2 AI-агент для аудиту великих наборів наукових даних, автоматичного виявлення аномалій та шумів.",
+    priceUSDC: 25,
+    priceLVEX: 110,
+    type: "Data Auditing",
+    status: "ONLINE"
+  },
+  {
+    id: "ai-3",
+    name: "ChemSynth Planner",
+    desc: "ШІ-модель для передбачення шляхів реакцій та оптимізації кристалізації нових надпровідників.",
+    priceUSDC: 15,
+    priceLVEX: 65,
+    type: "Material Science",
+    status: "BUSY"
+  }
+];
+
+const initialLabs: LabCapacity[] = [
+  {
+    id: "lab-1",
+    name: "Cryogenic Superconductor Rig (Gen-2)",
+    location: "Мюнхен, Німеччина",
+    desc: "Повністю автоматизована установка для тестування критичної температури надпровідників (від 4K до 300K). Інтегрований SQUID-сенсор.",
+    priceUSDC: 250,
+    specs: ["He-4 Closed Loop Cooling", "SQUID Magnetometer", "10Tesla Superconducting Magnet"]
+  },
+  {
+    id: "lab-2",
+    name: "High-Vacuum Chamber Array (10^-8 Torr)",
+    location: "Цюрих, Швейцарія",
+    desc: "Вакуумний стенд для тестування безпаливних асиметричних конденсаторів та мікро-двигунів у безповітряному просторі.",
+    priceUSDC: 180,
+    specs: ["Turbomolecular Pumps", "Torsional Micro-Thrust Balance", "RGA Gas Analyzer"]
+  },
+  {
+    id: "lab-3",
+    name: "MeV Scanning Electron Microscope",
+    location: "Токіо, Японія",
+    desc: "Сканувальний електронний мікроскоп високої роздільної здатності з можливістю віддаленого керування та спектроскопією EDX.",
+    priceUSDC: 400,
+    specs: ["Sub-nanometer resolution", "Remote API Access", "In-situ Heating Stage"]
+  }
+];
+
+const initialProducts: PhysicalProduct[] = [
+  {
+    id: "prod-1",
+    name: "YBCO Superconductor Disk (90mm)",
+    desc: "Диск високотемпературного ітрій-барій-мідного надпровідника для дослідження ефектів гравітаційного екранування.",
+    priceUSDC: 350,
+    priceSOL: 2.5,
+    stock: "5 одиниць в наявності"
+  },
+  {
+    id: "prod-2",
+    name: "Asymmetric Capacitor Plate Set",
+    desc: "Спеціально розроблений комплект асиметричних алюмінієвих пластин для відтворення ефекту Біфельда-Брауна в домашніх лабораторіях.",
+    priceUSDC: 120,
+    priceSOL: 0.85,
+    stock: "12 одиниць в наявності"
+  },
+  {
+    id: "prod-3",
+    name: "Graphene Monolayer Sheets (10pcs)",
+    desc: "Набір монокристалічних листів графену на мідній підкладці розміром 10x10мм для провідникових експериментів.",
+    priceUSDC: 95,
+    priceSOL: 0.68,
+    stock: "В наявності"
+  }
+];
+
 export default function MarketplacePage() {
-  const { isAuthenticated, openAuthModal } = useAuth();
+  const { isAuthenticated, openAuthModal, role, isAdmin, profileData } = useAuth();
   const [activeCategory, setActiveCategory] = useState<"ALL" | "AI" | "LAAS" | "GOODS">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const [mounted, setMounted] = useState(false);
+  const [aiAgents, setAiAgents] = useState<AIAgent[]>([]);
+  const [labs, setLabs] = useState<LabCapacity[]>([]);
+  const [products, setProducts] = useState<PhysicalProduct[]>([]);
+  const [moderationQueue, setModerationQueue] = useState<ModerationRequest[]>([]);
 
   // Modals state
   const [rentAgent, setRentAgent] = useState<AIAgent | null>(null);
@@ -61,91 +163,174 @@ export default function MarketplacePage() {
   const [buyCurrency, setBuyCurrency] = useState<"USDC" | "SOL">("USDC");
   const [shippingAddress, setShippingAddress] = useState("");
   const [buyTxState, setBuyTxState] = useState<"IDLE" | "SIGNING" | "CONFIRMING" | "SUCCESS">("IDLE");
+  // Submit Modal state
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitName, setSubmitName] = useState("");
+  const [submitDesc, setSubmitDesc] = useState("");
+  const [submitPriceUSDC, setSubmitPriceUSDC] = useState("");
+  const [submitPriceLVEX, setSubmitPriceLVEX] = useState("");
+  const [submitAgentType, setSubmitAgentType] = useState("");
+  const [submitLocation, setSubmitLocation] = useState("");
+  const [submitSpecs, setSubmitSpecs] = useState("");
+  const [submitPriceSOL, setSubmitPriceSOL] = useState("");
+  const [submitStock, setSubmitStock] = useState("");
 
-  // Mock data
-  const aiAgents: AIAgent[] = [
-    {
-      id: "ai-1",
-      name: "Quantum Simulator v4",
-      desc: "Високошвидкісний емулятор гамільтоніанів для симуляції кубітів та квантового відпалу на 128 кубітах.",
-      priceUSDC: 10,
-      priceLVEX: 45, // ~10% discount
-      type: "Quantum Computing",
-      status: "ONLINE"
-    },
-    {
-      id: "ai-2",
-      name: "Vexy Auditor Pro",
-      desc: "Шор-2 AI-агент для аудиту великих наборів наукових даних, автоматичного виявлення аномалій та шумів.",
-      priceUSDC: 25,
-      priceLVEX: 110,
-      type: "Data Auditing",
-      status: "ONLINE"
-    },
-    {
-      id: "ai-3",
-      name: "ChemSynth Planner",
-      desc: "ШІ-модель для передбачення шляхів реакцій та оптимізації кристалізації нових надпровідників.",
-      priceUSDC: 15,
-      priceLVEX: 65,
-      type: "Material Science",
-      status: "BUSY"
-    }
-  ];
+  // Load from localStorage
+  useEffect(() => {
+    setMounted(true);
+    const savedAI = localStorage.getItem("labvex_mp_ai");
+    const savedLabs = localStorage.getItem("labvex_mp_labs");
+    const savedProducts = localStorage.getItem("labvex_mp_products");
+    const savedQueue = localStorage.getItem("labvex_moderation_queue");
 
-  const labs: LabCapacity[] = [
-    {
-      id: "lab-1",
-      name: "Cryogenic Superconductor Rig (Gen-2)",
-      location: "Мюнхен, Німеччина",
-      desc: "Повністю автоматизована установка для тестування критичної температури надпровідників (від 4K до 300K). Інтегрований SQUID-сенсор.",
-      priceUSDC: 250,
-      specs: ["He-4 Closed Loop Cooling", "SQUID Magnetometer", "10Tesla Superconducting Magnet"]
-    },
-    {
-      id: "lab-2",
-      name: "High-Vacuum Chamber Array (10^-8 Torr)",
-      location: "Цюрих, Швейцарія",
-      desc: "Вакуумний стенд для тестування безпаливних асиметричних конденсаторів та мікро-двигунів у безповітряному просторі.",
-      priceUSDC: 180,
-      specs: ["Turbomolecular Pumps", "Torsional Micro-Thrust Balance", "RGA Gas Analyzer"]
-    },
-    {
-      id: "lab-3",
-      name: "MeV Scanning Electron Microscope",
-      location: "Токіо, Японія",
-      desc: "Сканувальний електронний мікроскоп високої роздільної здатності з можливістю віддаленого керування та спектроскопією EDX.",
-      priceUSDC: 400,
-      specs: ["Sub-nanometer resolution", "Remote API Access", "In-situ Heating Stage"]
+    if (savedAI) {
+      try { setAiAgents(JSON.parse(savedAI)); } catch(e) {}
+    } else {
+      setAiAgents(initialAiAgents);
+      localStorage.setItem("labvex_mp_ai", JSON.stringify(initialAiAgents));
     }
-  ];
 
-  const products: PhysicalProduct[] = [
-    {
-      id: "prod-1",
-      name: "YBCO Superconductor Disk (90mm)",
-      desc: "Диск високотемпературного ітрій-барій-мідного надпровідника для дослідження ефектів гравітаційного екранування.",
-      priceUSDC: 350,
-      priceSOL: 2.5,
-      stock: "5 одиниць в наявності"
-    },
-    {
-      id: "prod-2",
-      name: "Asymmetric Capacitor Plate Set",
-      desc: "Спеціально розроблений комплект асиметричних алюмінієвих пластин для відтворення ефекту Біфельда-Брауна в домашніх лабораторіях.",
-      priceUSDC: 120,
-      priceSOL: 0.85,
-      stock: "12 одиниць в наявності"
-    },
-    {
-      id: "prod-3",
-      name: "Graphene Monolayer Sheets (10pcs)",
-      desc: "Набір монокристалічних листів графену на мідній підкладці розміром 10x10мм для провідникових експериментів.",
-      priceUSDC: 95,
-      priceSOL: 0.68,
-      stock: "В наявності"
+    if (savedLabs) {
+      try { setLabs(JSON.parse(savedLabs)); } catch(e) {}
+    } else {
+      setLabs(initialLabs);
+      localStorage.setItem("labvex_mp_labs", JSON.stringify(initialLabs));
     }
-  ];
+
+    if (savedProducts) {
+      try { setProducts(JSON.parse(savedProducts)); } catch(e) {}
+    } else {
+      setProducts(initialProducts);
+      localStorage.setItem("labvex_mp_products", JSON.stringify(initialProducts));
+    }
+
+    if (savedQueue) {
+      try { setModerationQueue(JSON.parse(savedQueue)); } catch(e) {}
+    } else {
+      setModerationQueue([]);
+    }
+  }, []);
+
+  // Save changes to localStorage
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem("labvex_mp_ai", JSON.stringify(aiAgents));
+  }, [aiAgents, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem("labvex_mp_labs", JSON.stringify(labs));
+  }, [labs, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem("labvex_mp_products", JSON.stringify(products));
+  }, [products, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    localStorage.setItem("labvex_moderation_queue", JSON.stringify(moderationQueue));
+  }, [moderationQueue, mounted]);
+
+  // Form submission handler
+  const handleSubmitOffer = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!submitName || !submitDesc || !submitPriceUSDC) return;
+
+    let offerData: any = {};
+    let offerType: "AI" | "LAAS" | "GOODS" = "GOODS";
+
+    if (role === "DEVELOPER") {
+      offerType = "AI";
+      offerData = {
+        id: `ai-${Date.now()}`,
+        name: submitName,
+        desc: submitDesc,
+        priceUSDC: Number(submitPriceUSDC),
+        priceLVEX: Number(submitPriceLVEX) || Math.round(Number(submitPriceUSDC) * 4.5),
+        type: submitAgentType || "AI Model",
+        status: "ONLINE"
+      };
+    } else if (role === "LABORATORY") {
+      offerType = "LAAS";
+      offerData = {
+        id: `lab-${Date.now()}`,
+        name: submitName,
+        location: submitLocation || "Віддалено (LABVEX)",
+        desc: submitDesc,
+        priceUSDC: Number(submitPriceUSDC),
+        specs: submitSpecs ? submitSpecs.split(",").map(s => s.trim()) : ["Remote API Access"]
+      };
+    } else if (role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") {
+      offerType = "GOODS";
+      offerData = {
+        id: `prod-${Date.now()}`,
+        name: submitName,
+        desc: submitDesc,
+        priceUSDC: Number(submitPriceUSDC),
+        priceSOL: Number(submitPriceSOL) || Number((Number(submitPriceUSDC) / 140).toFixed(2)),
+        stock: submitStock || "В наявності"
+      };
+    }
+
+    const newRequest: ModerationRequest = {
+      id: `req-${Date.now()}`,
+      userId: profileData.name || "Specialist",
+      userName: profileData.name || "Specialist",
+      userRole: role,
+      type: offerType,
+      data: offerData,
+      status: "PENDING",
+      createdAt: new Date().toLocaleDateString("uk-UA")
+    };
+
+    setModerationQueue(prev => [newRequest, ...prev]);
+
+    // Reset Form
+    setSubmitName("");
+    setSubmitDesc("");
+    setSubmitPriceUSDC("");
+    setSubmitPriceLVEX("");
+    setSubmitAgentType("");
+    setSubmitLocation("");
+    setSubmitSpecs("");
+    setSubmitPriceSOL("");
+    setSubmitStock("");
+    setShowSubmitModal(false);
+
+    alert("Вашу пропозицію надіслано на модерацію. Вона з'явиться на маркетплейсі після ручного схвалення адміністратором.");
+  };
+
+  // Admin approval/rejection handlers
+  const handleApproveRequest = (requestId: string) => {
+    const request = moderationQueue.find(r => r.id === requestId);
+    if (!request) return;
+
+    if (request.type === "AI") {
+      setAiAgents(prev => [request.data, ...prev]);
+    } else if (request.type === "LAAS") {
+      setLabs(prev => [request.data, ...prev]);
+    } else if (request.type === "GOODS") {
+      setProducts(prev => [request.data, ...prev]);
+    }
+
+    setModerationQueue(prev => 
+      prev.map(r => r.id === requestId ? { ...r, status: "APPROVED" } : r)
+    );
+
+    alert(`Пропозицію "${request.data.name}" успішно схвалено та опубліковано!`);
+  };
+
+  const handleRejectRequest = (requestId: string) => {
+    const request = moderationQueue.find(r => r.id === requestId);
+    if (!request) return;
+
+    setModerationQueue(prev => 
+      prev.map(r => r.id === requestId ? { ...r, status: "REJECTED" } : r)
+    );
+
+    alert(`Пропозицію "${request.data.name}" відхилено.`);
+  };
 
   // Simulations
   const handleRentAgent = () => {
@@ -223,7 +408,7 @@ export default function MarketplacePage() {
     <section className="space-y-8">
       {/* Page Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-gray-200 pb-4 gap-4">
-        <div>
+        <div className="space-y-2">
           <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Store className="w-6 h-6 text-green-600" />
             Global Science Marketplace
@@ -231,6 +416,17 @@ export default function MarketplacePage() {
           <p className="text-sm text-gray-500">
             Оренда суверенних AI-агентів, лабораторного обладнання LaaS та придбання експериментальних матеріалів.
           </p>
+          
+          {/* Submit Offer Button */}
+          {isAuthenticated && (role === "DEVELOPER" || role === "LABORATORY" || role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && (
+            <button
+              onClick={() => setShowSubmitModal(true)}
+              className="mt-2 py-1.5 px-3 text-xs bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              Створити пропозицію
+            </button>
+          )}
         </div>
         
         {/* Search Bar */}
@@ -261,6 +457,146 @@ export default function MarketplacePage() {
           </button>
         ))}
       </div>
+
+      {/* Admin Moderation Queue Dashboard */}
+      {isAdmin && (
+        <div className="bg-gradient-to-r from-red-500/10 to-amber-500/10 border border-red-500/20 rounded-3xl p-6 md:p-8 space-y-6 shadow-xl backdrop-blur-md relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-amber-500" />
+          <div className="flex items-center justify-between border-b border-red-500/10 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-600">
+                <ShieldCheck className="w-5 h-5 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Адміністративна панель модерації (Moderation Dashboard)</h3>
+                <p className="text-xs text-gray-500">Схвалення або відхилення пропозицій спеціалістів на маркетплейс</p>
+              </div>
+            </div>
+            <span className="text-xs bg-red-100 text-red-700 font-bold px-3 py-1 rounded-full">
+              {moderationQueue.filter(r => r.status === "PENDING").length} запитів
+            </span>
+          </div>
+
+          {moderationQueue.filter(r => r.status === "PENDING").length === 0 ? (
+            <div className="py-8 text-center text-gray-500 text-sm">
+              Немає нових запитів на модерацію. Все перевірено!
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {moderationQueue.filter(r => r.status === "PENDING").map(req => (
+                <div key={req.id} className="p-5 bg-white border border-gray-200 rounded-2xl flex flex-col md:flex-row justify-between items-start gap-6 hover:shadow-md transition-all">
+                  <div className="space-y-3 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
+                        {req.type === "AI" && "🤖 AI Agent"}
+                        {req.type === "LAAS" && "🔬 LaaS Capacity"}
+                        {req.type === "GOODS" && "📦 Product/Material"}
+                      </span>
+                      <span className="text-[10px] text-gray-400">Від:</span>
+                      <span className="text-xs font-bold text-gray-800">{req.userName}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded border border-blue-100">{req.userRole}</span>
+                      <span className="text-[10px] text-gray-400 font-mono ml-auto md:ml-0">{req.createdAt}</span>
+                    </div>
+
+                    <div className="border-t border-gray-100 pt-2.5">
+                      <h4 className="font-bold text-gray-900">{req.data.name}</h4>
+                      <p className="text-sm text-gray-600 mt-1">{req.data.desc}</p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50/50 p-3 rounded-xl border border-gray-100">
+                      {req.type === "AI" && (
+                        <>
+                          <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC} / год</strong></div>
+                          <div><span className="text-gray-400">Ціна LVEX:</span> <strong className="text-gray-700">{req.data.priceLVEX}</strong></div>
+                          <div className="col-span-2"><span className="text-gray-400">Категорія:</span> <strong className="text-gray-700">{req.data.type}</strong></div>
+                        </>
+                      )}
+                      {req.type === "LAAS" && (
+                        <>
+                          <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC} / день</strong></div>
+                          <div><span className="text-gray-400">Локація:</span> <strong className="text-gray-700">{req.data.location}</strong></div>
+                          <div className="col-span-2"><span className="text-gray-400">Специфікації:</span> <strong className="text-gray-700">{req.data.specs?.join(", ")}</strong></div>
+                        </>
+                      )}
+                      {req.type === "GOODS" && (
+                        <>
+                          <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC}</strong></div>
+                          <div><span className="text-gray-400">Ціна SOL:</span> <strong className="text-gray-700">{req.data.priceSOL}</strong></div>
+                          <div className="col-span-2"><span className="text-gray-400">Наявність:</span> <strong className="text-gray-700">{req.data.stock}</strong></div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex md:flex-col gap-2 shrink-0 w-full md:w-auto">
+                    <button
+                      onClick={() => handleApproveRequest(req.id)}
+                      className="flex-1 md:w-32 py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleRejectRequest(req.id)}
+                      className="flex-1 md:w-32 py-2 px-4 bg-red-500 hover:bg-red-600 text-white font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* My Submissions Track Section */}
+      {isAuthenticated && moderationQueue.filter(r => r.userName === profileData.name).length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 space-y-6 shadow-sm">
+          <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+            <Clock className="w-5 h-5 text-gray-500" />
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Мої запити на публікацію (My Marketplace Offers)</h3>
+              <p className="text-xs text-gray-500">Відстеження статусу ваших пропозицій на маркетплейсі</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {moderationQueue.filter(r => r.userName === profileData.name).map(req => (
+              <div key={req.id} className="p-4 border border-gray-100 rounded-xl flex items-center justify-between gap-4 text-sm bg-gray-50/30">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <strong className="text-gray-900">{req.data.name}</strong>
+                    <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold uppercase">
+                      {req.type}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 line-clamp-1">{req.data.desc}</p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {req.status === "PENDING" && (
+                    <span className="text-xs font-bold px-3 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-200 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+                      Очікує перевірки
+                    </span>
+                  )}
+                  {req.status === "APPROVED" && (
+                    <span className="text-xs font-bold px-3 py-1 bg-green-50 text-green-700 rounded-full border border-green-200 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Опубліковано
+                    </span>
+                  )}
+                  {req.status === "REJECTED" && (
+                    <span className="text-xs font-bold px-3 py-1 bg-red-50 text-red-700 rounded-full border border-red-200 flex items-center gap-1.5">
+                      ✕ Відхилено
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Main Blocks Layout */}
       <div className="space-y-10">
@@ -840,6 +1176,179 @@ export default function MarketplacePage() {
                   </div>
                 )}
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ========================================================================= */}
+      {/* MODAL 4: SUBMIT NEW OFFER */}
+      {/* ========================================================================= */}
+      <AnimatePresence>
+        {showSubmitModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <Plus className="w-5 h-5 text-green-600" />
+                  Створення нової пропозиції
+                </h3>
+                <button 
+                  onClick={() => setShowSubmitModal(false)} 
+                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmitOffer} className="p-6 space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                    {role === "DEVELOPER" && "Назва AI-Агента"}
+                    {role === "LABORATORY" && "Назва обладнання / установки"}
+                    {(role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && "Назва товару / матеріалу"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={submitName}
+                    onChange={(e) => setSubmitName(e.target.value)}
+                    placeholder="Введіть назву..."
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Опис</label>
+                  <textarea
+                    required
+                    rows={3}
+                    value={submitDesc}
+                    onChange={(e) => setSubmitDesc(e.target.value)}
+                    placeholder="Детальний опис вашої пропозиції..."
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ціна (USDC)</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={submitPriceUSDC}
+                      onChange={(e) => setSubmitPriceUSDC(e.target.value)}
+                      placeholder="Ціна в USDC"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                    />
+                  </div>
+
+                  {role === "DEVELOPER" && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ціна (LVEX)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={submitPriceLVEX}
+                        onChange={(e) => setSubmitPriceLVEX(e.target.value)}
+                        placeholder="LVEX ціна"
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      />
+                    </div>
+                  )}
+
+                  {role === "LABORATORY" && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Локація</label>
+                      <input
+                        type="text"
+                        value={submitLocation}
+                        onChange={(e) => setSubmitLocation(e.target.value)}
+                        placeholder="Наприклад: Київ, Україна"
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      />
+                    </div>
+                  )}
+
+                  {(role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && (
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ціна (SOL)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={submitPriceSOL}
+                        onChange={(e) => setSubmitPriceSOL(e.target.value)}
+                        placeholder="SOL ціна"
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {role === "DEVELOPER" && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Тип / Категорія ШІ</label>
+                    <input
+                      type="text"
+                      value={submitAgentType}
+                      onChange={(e) => setSubmitAgentType(e.target.value)}
+                      placeholder="Наприклад: Quantum Computing, Data Auditing"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                    />
+                  </div>
+                )}
+
+                {role === "LABORATORY" && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Характеристики / Специфікації (через кому)</label>
+                    <input
+                      type="text"
+                      value={submitSpecs}
+                      onChange={(e) => setSubmitSpecs(e.target.value)}
+                      placeholder="He-4 cooling, Ultra-vacuum, Remote control"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                    />
+                  </div>
+                )}
+
+                {(role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Наявність на складі (Stock)</label>
+                    <input
+                      type="text"
+                      value={submitStock}
+                      onChange={(e) => setSubmitStock(e.target.value)}
+                      placeholder="Наприклад: 5 одиниць в наявності"
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                    />
+                  </div>
+                )}
+
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Зверніть увагу:</strong> Ваша пропозиція буде надіслана до черги ручної перевірки. Вона буде опублікована на маркетплейсі одразу після схвалення адміністратором.
+                  </span>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-md transition-colors text-sm cursor-pointer"
+                >
+                  Надіслати на модерацію
+                </button>
+              </form>
             </motion.div>
           </motion.div>
         )}
