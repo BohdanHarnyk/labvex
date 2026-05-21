@@ -29,16 +29,16 @@ export default function MissionsPage() {
           simulateAnalysis();
           return 100;
         }
-        return p + 10;
+        return p + 20;
       });
-    }, 200);
+    }, 50);
   };
 
   const simulateAnalysis = () => {
     // Simulate Vexy AI Analysis
     setTimeout(() => {
       setUploadState("SUCCESS");
-    }, 3000);
+    }, 500);
   };
 
   return (

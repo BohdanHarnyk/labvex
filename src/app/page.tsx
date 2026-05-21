@@ -23,11 +23,7 @@ export default function LandingPage() {
   const { isAuthenticated, openAuthModal } = useAuth();
   const router = useRouter();
 
-  useEffect(() => {
-    if (isAuthenticated) {
-      router.push("/app");
-    }
-  }, [isAuthenticated, router]);
+
 
   const handleLaunchApp = (e: React.MouseEvent) => {
     e.preventDefault();

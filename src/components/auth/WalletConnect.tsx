@@ -31,9 +31,9 @@ export function WalletConnect() {
           setTerminalLogs((prev) => [...prev, logs[i]]);
         } else {
           clearInterval(interval);
-          setTimeout(() => setShowTerminal(false), 1000); // Hide after success
+          setTimeout(() => setShowTerminal(false), 200); // Hide after success
         }
-      }, 500);
+      }, 100);
       return () => clearInterval(interval);
     } else if (connected) {
       setShowTerminal(false);

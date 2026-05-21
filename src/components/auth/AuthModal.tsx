@@ -57,59 +57,59 @@ export function AuthModal() {
     setOnboardStep("TERMINAL");
     setLogs(["> Initializing LABVEX OS..."]);
     
-    setTimeout(() => setLogs(l => [...l, "> Establishing connection... OK"]), 600);
-    setTimeout(() => setLogs(l => [...l, "> Fetching decentralized identity..."]), 1200);
+    setTimeout(() => setLogs(l => [...l, "> Establishing connection... OK"]), 100);
+    setTimeout(() => setLogs(l => [...l, "> Fetching decentralized identity..."]), 200);
     
     if (path === "SCIENTIST") {
-      setTimeout(() => setLogs(l => [...l, "> Checking ZK-Proofs against ORCID database..."]), 2000);
-      setTimeout(() => setLogs(l => [...l, "> Generating verifiable credentials (SBT)..."]), 3500);
+      setTimeout(() => setLogs(l => [...l, "> Checking ZK-Proofs against ORCID database..."]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Generating verifiable credentials (SBT)..."]), 450);
       setTimeout(() => {
         setLogs(l => [...l, "> Access granted. Welcome, Researcher."]);
         setTimeout(() => {
           onboardScientist(data.orcid);
           closeAuthModal();
-        }, 1000);
-      }, 4500);
+        }, 150);
+      }, 600);
     } else if (path === "DEVELOPER") {
-      setTimeout(() => setLogs(l => [...l, `> Querying GitHub user: ${data.github}...`]), 2000);
-      setTimeout(() => setLogs(l => [...l, "> Setting up secure SDK runtime sandbox..."]), 3200);
+      setTimeout(() => setLogs(l => [...l, `> Querying GitHub user: ${data.github}...`]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Setting up secure SDK runtime sandbox..."]), 450);
       setTimeout(() => {
         setLogs(l => [...l, "> Access granted. Developer workspace unlocked."]);
         setTimeout(() => {
           onboardDeveloper(data.github);
           closeAuthModal();
-        }, 1000);
-      }, 4200);
+        }, 150);
+      }, 600);
     } else if (path === "LABORATORY") {
-      setTimeout(() => setLogs(l => [...l, `> Pinging hardware endpoint at ${data.facilityName}...`]), 2000);
-      setTimeout(() => setLogs(l => [...l, "> Fetching ZK-certified cleanroom telemetry..."]), 3200);
+      setTimeout(() => setLogs(l => [...l, `> Pinging hardware endpoint at ${data.facilityName}...`]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Fetching ZK-certified cleanroom telemetry..."]), 450);
       setTimeout(() => {
         setLogs(l => [...l, "> Access granted. Live Telemetry stream established."]);
         setTimeout(() => {
           onboardLaboratory(data.facilityName);
           closeAuthModal();
-        }, 1000);
-      }, 4200);
+        }, 150);
+      }, 600);
     } else if (path === "COMPANY") {
-      setTimeout(() => setLogs(l => [...l, `> Loading records for: ${data.companyName}...`]), 2000);
-      setTimeout(() => setLogs(l => [...l, "> Verifying tokenized R&D fund addresses..."]), 3200);
+      setTimeout(() => setLogs(l => [...l, `> Loading records for: ${data.companyName}...`]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Verifying tokenized R&D fund addresses..."]), 450);
       setTimeout(() => {
         setLogs(l => [...l, "> Access granted. Multi-sig workspace deployed."]);
         setTimeout(() => {
           onboardCompany(data.companyName);
           closeAuthModal();
-        }, 1000);
-      }, 4200);
+        }, 150);
+      }, 600);
     } else {
-      setTimeout(() => setLogs(l => [...l, "> Registering Citizen Explorer node..."]), 1800);
-      setTimeout(() => setLogs(l => [...l, "> Saving research preferences..."]), 2800);
+      setTimeout(() => setLogs(l => [...l, "> Registering Citizen Explorer node..."]), 250);
+      setTimeout(() => setLogs(l => [...l, "> Saving research preferences..."]), 400);
       setTimeout(() => {
         setLogs(l => [...l, "> Access granted. Welcome to the Network."]);
         setTimeout(() => {
           onboardCitizen(data.interests);
           closeAuthModal();
-        }, 1000);
-      }, 3500);
+        }, 150);
+      }, 550);
     }
   };
 

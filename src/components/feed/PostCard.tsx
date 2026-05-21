@@ -64,7 +64,7 @@ export function PostCard({ title, content, author, authorRole = "VERIFIED_PHYSIC
       return;
     }
     setIsSummarizing(true);
-    setTimeout(() => setIsSummarizing(false), 2000);
+    setTimeout(() => setIsSummarizing(false), 500);
   };
 
   const handleInteract = () => {
@@ -88,7 +88,7 @@ export function PostCard({ title, content, author, authorRole = "VERIFIED_PHYSIC
     setTipTxState("SIGNING");
     setTimeout(() => {
       setTipTxState("SUCCESS");
-    }, 2000);
+    }, 500);
   };
 
   const displayContent = isAuthenticated ? content : content.slice(0, 150) + "...";

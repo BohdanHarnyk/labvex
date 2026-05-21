@@ -159,20 +159,20 @@ export default function MarketplacePage() {
 
     setTimeout(() => {
       setTerminalLogs(l => [...l, `> Allocating docker sandbox on decentralized compute node...`]);
-    }, 800);
+    }, 150);
 
     setTimeout(() => {
       setTerminalLogs(l => [...l, `> Loading AI Weights: ${rentAgent.name}...`]);
-    }, 1600);
+    }, 300);
 
     setTimeout(() => {
       setTerminalLogs(l => [...l, `> Injecting API boundaries & safety screening...`]);
       setRentTxState("TERMINAL");
-    }, 2400);
+    }, 450);
 
     setTimeout(() => {
       setTerminalLogs(l => [...l, `> Wallet signature confirmed on Solana.`]);
-    }, 3200);
+    }, 600);
 
     setTimeout(() => {
       const generatedKey = "lvx_sk_" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -180,7 +180,7 @@ export default function MarketplacePage() {
       setTerminalLogs(l => [...l, `> API Key generated successfully.`]);
       setTerminalLogs(l => [...l, `> Ready! Endpoint initialized.`]);
       setRentTxState("SUCCESS");
-    }, 4500);
+    }, 850);
   };
 
   const handleBookLab = () => {
@@ -194,7 +194,7 @@ export default function MarketplacePage() {
 
     setTimeout(() => {
       setBookTxState("SUCCESS");
-    }, 2500);
+    }, 500);
   };
 
   const handleBuyProduct = () => {
@@ -210,8 +210,8 @@ export default function MarketplacePage() {
       setBuyTxState("CONFIRMING");
       setTimeout(() => {
         setBuyTxState("SUCCESS");
-      }, 2500);
-    }, 1500);
+      }, 500);
+    }, 300);
   };
 
   // Filter items

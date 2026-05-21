@@ -25,8 +25,8 @@ export default function ResourceHubPage() {
       // Simulate on-chain confirmation
       setTimeout(() => {
         setTxState("SUCCESS");
-      }, 2500);
-    }, 1500);
+      }, 500);
+    }, 300);
   };
 
   const calculateIPT = (amt: string, asset: string) => {

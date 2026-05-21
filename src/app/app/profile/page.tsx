@@ -90,7 +90,7 @@ export default function ProfilePage() {
     setTimeout(() => {
       setIsScanning(false);
       setScanSuccess(true);
-    }, 3000); // 3 sec Vexy scan
+    }, 800); // 800 ms Vexy scan
   };
  
   const handleSaveProfile = () => {

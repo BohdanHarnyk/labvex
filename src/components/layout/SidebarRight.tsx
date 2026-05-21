@@ -42,7 +42,6 @@ export function SidebarRight() {
     setInputValue("");
     setIsTyping(true);
  
-    // Simulate AI response based on the "Adaptive mix" rule
     setTimeout(() => {
       const responses = [
         "Analyzing the dataset hashes... The variance correlates strongly with the provided temperature logs. I recommend a peer-review before proceeding to the IP Tokenization phase.",
@@ -54,7 +53,7 @@ export function SidebarRight() {
       
       setMessages(prev => [...prev, { id: Date.now().toString(), role: "vexy", content: randomResponse }]);
       setIsTyping(false);
-    }, 2000);
+    }, 600);
   };
  
   const handleTopicClick = (topic: string) => {
