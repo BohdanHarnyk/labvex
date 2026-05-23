@@ -1,0 +1,203 @@
+datasource db {
+  provider  = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  email           String?  @map("email")
+  walletAddress   String?  @unique @map("wallet_address")
+  username        String   @unique @map("username")
+  displayName     String?  @map("display_name")
+  bio             String?  @map("bio")
+  avatarUrl       String?  @map("avatar_url")
+  interests       String[] @default([]) @map("interests")
+  reputationScore Int      @default(0) @map("reputation_score")
+  badges          String[] @default([]) @map("badges")
+  isOnboarded     Boolean  @default(false) @map("is_onboarded")
+  role            String   @default("MEMBER") @map("role") // "MEMBER", "CITIZEN_EXPLORER", "VERIFIED_PHYSICIST", "NOBEL_LAUREATE", "DEVELOPER", "LABORATORY", "COMPANY"
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  posts          Post[]
+  comments       Comment[]
+  votes          Vote[]
+  bookmarks      Bookmark[]
+  participations MissionParticipation[]
+  repEvents      ReputationEvent[]
+  submissions    Submission[]
+  aiSessions     AiInteraction[]
+  notifications  Notification[]
+
+  followers Follow[] @relation("following")
+  following Follow[] @relation("follower")
+
+  @@map("users")
+}
+
+model Post {
+  id            String   @id @default(uuid()) @db.Uuid
+  authorId      String   @map("author_id") @db.Uuid
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title         String   @map("title")
+  content       String   @map("content")
+  category      String   @default("General") @map("category")
+  tags          String[] @default([]) @map("tags")
+  upvotes       Int      @default(0) @map("upvotes")
+  commentCount  Int      @default(0) @map("comment_count")
+  bookmarkCount Int      @default(0) @map("bookmark_count")
+  aiSummary     String?  @map("ai_summary")
+  isPinned      Boolean  @default(false) @map("is_pinned")
+  casFlag       Boolean  @default(false) @map("cas_flag")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  comments  Comment[]
+  bookmarks Bookmark[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String   @map("author_id") @db.Uuid
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parentId  String?  @map("parent_id") @db.Uuid
+  parent    Comment? @relation("comment_replies", fields: [parentId], references: [id], onDelete: Cascade)
+  content   String   @map("content")
+  upvotes   Int      @default(0) @map("upvotes")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  replies Comment[] @relation("comment_replies")
+
+  @@map("comments")
+}
+
+model Vote {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType String   @map("target_type") // 'post', 'comment'
+  targetId   String   @map("target_id") @db.Uuid
+  voteType   String   @map("vote_type") // 'up', 'down'
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([userId, targetType, targetId])
+  @@map("votes")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String   @map("post_id") @db.Uuid
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([userId, postId])
+  @@map("bookmarks")
+}
+
+model Mission {
+  id           String   @id @default(uuid()) @db.Uuid
+  title        String   @map("title")
+  description  String   @map("description")
+  difficulty   String   @map("difficulty") // 'easy', 'medium', 'hard'
+  repReward    Int      @map("rep_reward")
+  badgeReward  String?  @map("badge_reward")
+  category     String   @map("category")
+  status       String   @default("available") @map("status")
+  participants Int      @default(0) @map("participants")
+  deadline     DateTime? @map("deadline") @db.Timestamptz(6)
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  participations MissionParticipation[]
+
+  @@map("missions")
+}
+
+model MissionParticipation {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  missionId   String    @map("mission_id") @db.Uuid
+  mission     Mission   @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  status      String    @default("in_progress") @map("status") // 'in_progress', 'completed'
+  completedAt DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([userId, missionId])
+  @@map("mission_participations")
+}
+
+model ReputationEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  eventType   String   @map("event_type")
+  points      Int      @map("points")
+  description String   @map("description")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("reputation_events")
+}
+
+model Submission {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String   @map("title")
+  link      String?  @map("link")
+  category  String   @map("category")
+  status    String   @default("PENDING") @map("status") // 'PENDING', 'APPROVED', 'REJECTED'
+  authorId  String   @map("author_id") @db.Uuid
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  data      Json?    @map("data") // Зберігає повний опис послуги, specs, ціну тощо.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("submissions")
+}
+
+model AiInteraction {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String?  @map("user_id") @db.Uuid
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  sessionId   String   @map("session_id")
+  role        String   @map("role") // 'user', 'assistant'
+  content     String   @map("content")
+  contextType String?  @map("context_type") // 'feed', 'post', 'profile', 'general'
+  contextId   String?  @map("context_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("ai_interactions")
+}
+
+model Notification {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @map("type")
+  title     String   @map("title")
+  body      String   @map("body")
+  read      Boolean  @default(false) @map("read")
+  link      String?  @map("link")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("notifications")
+}
+
+model Follow {
+  id          String   @id @default(uuid()) @db.Uuid
+  followerId  String   @map("follower_id") @db.Uuid
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String   @map("following_id") @db.Uuid
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}

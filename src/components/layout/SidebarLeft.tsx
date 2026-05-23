@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Compass, FlaskConical, ShoppingBag, MessageSquare, User, Store } from "lucide-react";
+import { Home, Compass, FlaskConical, ShoppingBag, MessageSquare, User, Store, Award } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -35,6 +35,10 @@ export function SidebarLeft() {
         <Link href="/app/profile" className={`flex items-center gap-3 pl-2 pr-3 py-2.5 text-sm transition-all ${isActive('/app/profile') ? 'bg-green-50/80 text-green-700 border-l-4 border-green-600 rounded-r-lg font-semibold' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent rounded-lg font-medium'}`}>
           <User className="w-4 h-4" />
           My Profile
+        </Link>
+        <Link href="/app/reputation" className={`flex items-center gap-3 pl-2 pr-3 py-2.5 text-sm transition-all ${isActive('/app/reputation') ? 'bg-green-50/80 text-green-700 border-l-4 border-green-600 rounded-r-lg font-semibold' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent rounded-lg font-medium'}`}>
+          <Award className="w-4 h-4" />
+          Reputation
         </Link>
         <div className="pt-4 mt-4 border-t border-gray-100">
           <Link href="/app/resources" className={`flex items-center gap-3 pl-2 pr-3 py-2.5 text-sm transition-all ${isActive('/app/resources') ? 'bg-green-50/80 text-green-700 border-l-4 border-green-600 rounded-r-lg font-semibold' : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 border-l-4 border-transparent rounded-lg font-medium'}`}>

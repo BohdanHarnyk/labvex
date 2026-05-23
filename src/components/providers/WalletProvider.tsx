@@ -9,6 +9,8 @@ import { clusterApiUrl } from "@solana/web3.js";
 // Default styles that can be overridden by your app
 import "@solana/wallet-adapter-react-ui/styles.css";
 
+import { SessionProvider } from "next-auth/react";
+
 export function AppWalletProvider({ children }: { children: React.ReactNode }) {
   // Can be set to 'devnet', 'testnet', or 'mainnet-beta'
   const network = "devnet";
@@ -25,10 +27,13 @@ export function AppWalletProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>{children}</WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <SessionProvider>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>{children}</WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </SessionProvider>
   );
 }
+

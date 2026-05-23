@@ -5,10 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Store, Cpu, FlaskConical, Hammer, Search, Calendar, 
   DollarSign, Coins, ShieldCheck, Terminal, ArrowRight, 
-  Clock, MapPin, Truck, Settings, Sparkles, CheckCircle2, Plus 
+  Clock, MapPin, Truck, Settings, Sparkles, CheckCircle2, Plus, CoinsIcon, Send 
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
-
 
 // Define Types
 interface AIAgent {
@@ -39,14 +38,29 @@ interface PhysicalProduct {
   stock: string;
 }
 
+interface IPToken {
+  id: string;
+  title: string;
+  author: string;
+  progress: number;
+  raised: number;
+  goal: number;
+  royalty: number;
+  participants: number;
+}
+
 interface ModerationRequest {
   id: string;
-  userId: string;
-  userName: string;
-  userRole: string;
-  type: "AI" | "LAAS" | "GOODS";
-  data: any;
+  authorId: string;
+  author: {
+    username: string;
+    displayName: string | null;
+    role: string;
+  };
+  category: "AI" | "LAAS" | "GOODS";
+  title: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
+  data: any;
   createdAt: string;
 }
 
@@ -134,15 +148,49 @@ const initialProducts: PhysicalProduct[] = [
   }
 ];
 
+const initialIpts: IPToken[] = [
+  { 
+    id: "ipt-1", 
+    title: "CRISPR Base Editor Variant 4b (Off-Target Reduction)", 
+    author: "genetics_mapper", 
+    progress: 85, 
+    raised: 425000, 
+    goal: 500000, 
+    royalty: 4.5, 
+    participants: 142 
+  },
+  { 
+    id: "ipt-2", 
+    title: "Cyclic OSK Expression Protocol for Murine Models", 
+    author: "dr_chen_lab", 
+    progress: 30, 
+    raised: 150000, 
+    goal: 500000, 
+    royalty: 6.0, 
+    participants: 38 
+  },
+  { 
+    id: "ipt-3", 
+    title: "Non-Hallucinogenic Ibogaine Analog (Synthesis Pathway)", 
+    author: "neuro_synthesis", 
+    progress: 100, 
+    raised: 1200000, 
+    goal: 1200000, 
+    royalty: 3.0, 
+    participants: 310 
+  },
+];
+
 export default function MarketplacePage() {
   const { isAuthenticated, openAuthModal, role, isAdmin, profileData } = useAuth();
-  const [activeCategory, setActiveCategory] = useState<"ALL" | "AI" | "LAAS" | "GOODS">("ALL");
+  const [activeCategory, setActiveCategory] = useState<"ALL" | "IPT" | "AI" | "LAAS" | "GOODS">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [mounted, setMounted] = useState(false);
-  const [aiAgents, setAiAgents] = useState<AIAgent[]>([]);
-  const [labs, setLabs] = useState<LabCapacity[]>([]);
-  const [products, setProducts] = useState<PhysicalProduct[]>([]);
+  const [aiAgents, setAiAgents] = useState<AIAgent[]>(initialAiAgents);
+  const [labs, setLabs] = useState<LabCapacity[]>(initialLabs);
+  const [products, setProducts] = useState<PhysicalProduct[]>(initialProducts);
+  const [ipts, setIpts] = useState<IPToken[]>(initialIpts);
   const [moderationQueue, setModerationQueue] = useState<ModerationRequest[]>([]);
 
   // Modals state
@@ -163,6 +211,7 @@ export default function MarketplacePage() {
   const [buyCurrency, setBuyCurrency] = useState<"USDC" | "SOL">("USDC");
   const [shippingAddress, setShippingAddress] = useState("");
   const [buyTxState, setBuyTxState] = useState<"IDLE" | "SIGNING" | "CONFIRMING" | "SUCCESS">("IDLE");
+
   // Submit Modal state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitName, setSubmitName] = useState("");
@@ -175,65 +224,43 @@ export default function MarketplacePage() {
   const [submitPriceSOL, setSubmitPriceSOL] = useState("");
   const [submitStock, setSubmitStock] = useState("");
 
-  // Load from localStorage
+  const fetchSubmissions = async () => {
+    try {
+      const filterParam = isAdmin ? "all" : "my";
+      const res = await fetch(`/api/marketplace/submissions?filter=${filterParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        setModerationQueue(data);
+
+        // Separate and update lists
+        const approvedSubmissions = data.filter((s: any) => s.status === "APPROVED");
+        
+        const approvedAI = approvedSubmissions.filter((s: any) => s.category === "AI").map((s: any) => s.data);
+        const approvedLaas = approvedSubmissions.filter((s: any) => s.category === "LAAS").map((s: any) => s.data);
+        const approvedGoods = approvedSubmissions.filter((s: any) => s.category === "GOODS").map((s: any) => s.data);
+
+        setAiAgents([...initialAiAgents, ...approvedAI]);
+        setLabs([...initialLabs, ...approvedLaas]);
+        setProducts([...initialProducts, ...approvedGoods]);
+      }
+    } catch (e) {
+      console.error("Failed to load submissions", e);
+    }
+  };
+
+  // Load from database
   useEffect(() => {
     setMounted(true);
-    const savedAI = localStorage.getItem("labvex_mp_ai");
-    const savedLabs = localStorage.getItem("labvex_mp_labs");
-    const savedProducts = localStorage.getItem("labvex_mp_products");
-    const savedQueue = localStorage.getItem("labvex_moderation_queue");
-
-    if (savedAI) {
-      try { setAiAgents(JSON.parse(savedAI)); } catch(e) {}
-    } else {
-      setAiAgents(initialAiAgents);
-      localStorage.setItem("labvex_mp_ai", JSON.stringify(initialAiAgents));
-    }
-
-    if (savedLabs) {
-      try { setLabs(JSON.parse(savedLabs)); } catch(e) {}
-    } else {
-      setLabs(initialLabs);
-      localStorage.setItem("labvex_mp_labs", JSON.stringify(initialLabs));
-    }
-
-    if (savedProducts) {
-      try { setProducts(JSON.parse(savedProducts)); } catch(e) {}
-    } else {
-      setProducts(initialProducts);
-      localStorage.setItem("labvex_mp_products", JSON.stringify(initialProducts));
-    }
-
-    if (savedQueue) {
-      try { setModerationQueue(JSON.parse(savedQueue)); } catch(e) {}
-    } else {
-      setModerationQueue([]);
-    }
   }, []);
 
-  // Save changes to localStorage
   useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem("labvex_mp_ai", JSON.stringify(aiAgents));
-  }, [aiAgents, mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem("labvex_mp_labs", JSON.stringify(labs));
-  }, [labs, mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem("labvex_mp_products", JSON.stringify(products));
-  }, [products, mounted]);
-
-  useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem("labvex_moderation_queue", JSON.stringify(moderationQueue));
-  }, [moderationQueue, mounted]);
+    if (mounted) {
+      fetchSubmissions();
+    }
+  }, [mounted, isAdmin]);
 
   // Form submission handler
-  const handleSubmitOffer = (e: React.FormEvent) => {
+  const handleSubmitOffer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!submitName || !submitDesc || !submitPriceUSDC) return;
 
@@ -273,63 +300,71 @@ export default function MarketplacePage() {
       };
     }
 
-    const newRequest: ModerationRequest = {
-      id: `req-${Date.now()}`,
-      userId: profileData.name || "Specialist",
-      userName: profileData.name || "Specialist",
-      userRole: role,
-      type: offerType,
-      data: offerData,
-      status: "PENDING",
-      createdAt: new Date().toLocaleDateString("uk-UA")
-    };
+    try {
+      const res = await fetch("/api/marketplace/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: submitName,
+          category: offerType,
+          link: submitSpecs || null,
+          data: offerData,
+        }),
+      });
 
-    setModerationQueue(prev => [newRequest, ...prev]);
+      if (res.ok) {
+        // Reset Form
+        setSubmitName("");
+        setSubmitDesc("");
+        setSubmitPriceUSDC("");
+        setSubmitPriceLVEX("");
+        setSubmitAgentType("");
+        setSubmitLocation("");
+        setSubmitSpecs("");
+        setSubmitPriceSOL("");
+        setSubmitStock("");
+        setShowSubmitModal(false);
 
-    // Reset Form
-    setSubmitName("");
-    setSubmitDesc("");
-    setSubmitPriceUSDC("");
-    setSubmitPriceLVEX("");
-    setSubmitAgentType("");
-    setSubmitLocation("");
-    setSubmitSpecs("");
-    setSubmitPriceSOL("");
-    setSubmitStock("");
-    setShowSubmitModal(false);
-
-    alert("Вашу пропозицію надіслано на модерацію. Вона з'явиться на маркетплейсі після ручного схвалення адміністратором.");
+        await fetchSubmissions();
+        alert("Вашу пропозицію надіслано на модерацію. Вона з'явиться на маркетплейсі після ручного схвалення адміністратором.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Не вдалося надіслати пропозицію.");
+    }
   };
 
   // Admin approval/rejection handlers
-  const handleApproveRequest = (requestId: string) => {
-    const request = moderationQueue.find(r => r.id === requestId);
-    if (!request) return;
-
-    if (request.type === "AI") {
-      setAiAgents(prev => [request.data, ...prev]);
-    } else if (request.type === "LAAS") {
-      setLabs(prev => [request.data, ...prev]);
-    } else if (request.type === "GOODS") {
-      setProducts(prev => [request.data, ...prev]);
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(`/api/marketplace/submissions/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "APPROVED" }),
+      });
+      if (res.ok) {
+        await fetchSubmissions();
+        alert("Пропозицію схвалено та опубліковано!");
+      }
+    } catch (e) {
+      console.error(e);
     }
-
-    setModerationQueue(prev => 
-      prev.map(r => r.id === requestId ? { ...r, status: "APPROVED" } : r)
-    );
-
-    alert(`Пропозицію "${request.data.name}" успішно схвалено та опубліковано!`);
   };
 
-  const handleRejectRequest = (requestId: string) => {
-    const request = moderationQueue.find(r => r.id === requestId);
-    if (!request) return;
-
-    setModerationQueue(prev => 
-      prev.map(r => r.id === requestId ? { ...r, status: "REJECTED" } : r)
-    );
-
-    alert(`Пропозицію "${request.data.name}" відхилено.`);
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      const res = await fetch(`/api/marketplace/submissions/${requestId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "REJECTED" }),
+      });
+      if (res.ok) {
+        await fetchSubmissions();
+        alert("Пропозицію відхилено.");
+      }
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   // Simulations
@@ -403,6 +438,12 @@ export default function MarketplacePage() {
   const filteredAI = aiAgents.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()) || a.desc.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredLabs = labs.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()) || l.desc.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.desc.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredIpts = ipts.filter(i => i.title.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  // Formatter for Currency
+  const formatNumber = (num: number) => {
+    return num >= 1000000 ? (num / 1000000).toFixed(1) + "M" : num >= 1000 ? (num / 1000).toFixed(0) + "K" : num.toString();
+  };
 
   return (
     <section className="space-y-8">
@@ -414,7 +455,7 @@ export default function MarketplacePage() {
             Global Science Marketplace
           </h2>
           <p className="text-sm text-gray-500">
-            Оренда суверенних AI-агентів, лабораторного обладнання LaaS та придбання експериментальних матеріалів.
+            Краудфандинг DeSci патентів (IPTs), оренда суверенних AI-агентів, лабораторного обладнання LaaS та придбання експериментальних матеріалів.
           </p>
           
           {/* Submit Offer Button */}
@@ -443,16 +484,17 @@ export default function MarketplacePage() {
       </div>
 
       {/* Category Tabs */}
-      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl max-w-md">
-        {(["ALL", "AI", "LAAS", "GOODS"] as const).map(tab => (
+      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl max-w-lg">
+        {(["ALL", "IPT", "AI", "LAAS", "GOODS"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveCategory(tab)}
-            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors ${activeCategory === tab ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-colors cursor-pointer ${activeCategory === tab ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'}`}
           >
             {tab === "ALL" && "All items"}
+            {tab === "IPT" && "IP Tokens"}
             {tab === "AI" && "AI Agents"}
-            {tab === "LAAS" && "Lab Capacities"}
+            {tab === "LAAS" && "Lab Slots"}
             {tab === "GOODS" && "Products"}
           </button>
         ))}
@@ -488,14 +530,13 @@ export default function MarketplacePage() {
                   <div className="space-y-3 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-xs font-bold px-2 py-0.5 bg-gray-100 text-gray-700 rounded-md">
-                        {req.type === "AI" && "🤖 AI Agent"}
-                        {req.type === "LAAS" && "🔬 LaaS Capacity"}
-                        {req.type === "GOODS" && "📦 Product/Material"}
+                        {req.category === "AI" && "🤖 AI Agent"}
+                        {req.category === "LAAS" && "🔬 LaaS Capacity"}
+                        {req.category === "GOODS" && "📦 Product/Material"}
                       </span>
                       <span className="text-[10px] text-gray-400">Від:</span>
-                      <span className="text-xs font-bold text-gray-800">{req.userName}</span>
-                      <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded border border-blue-100">{req.userRole}</span>
-                      <span className="text-[10px] text-gray-400 font-mono ml-auto md:ml-0">{req.createdAt}</span>
+                      <span className="text-xs font-bold text-gray-800">{req.author.displayName || req.author.username}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded border border-blue-100">{req.author.role}</span>
                     </div>
 
                     <div className="border-t border-gray-100 pt-2.5">
@@ -504,21 +545,21 @@ export default function MarketplacePage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 text-xs bg-gray-50/50 p-3 rounded-xl border border-gray-100">
-                      {req.type === "AI" && (
+                      {req.category === "AI" && (
                         <>
                           <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC} / год</strong></div>
                           <div><span className="text-gray-400">Ціна LVEX:</span> <strong className="text-gray-700">{req.data.priceLVEX}</strong></div>
                           <div className="col-span-2"><span className="text-gray-400">Категорія:</span> <strong className="text-gray-700">{req.data.type}</strong></div>
                         </>
                       )}
-                      {req.type === "LAAS" && (
+                      {req.category === "LAAS" && (
                         <>
                           <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC} / день</strong></div>
                           <div><span className="text-gray-400">Локація:</span> <strong className="text-gray-700">{req.data.location}</strong></div>
                           <div className="col-span-2"><span className="text-gray-400">Специфікації:</span> <strong className="text-gray-700">{req.data.specs?.join(", ")}</strong></div>
                         </>
                       )}
-                      {req.type === "GOODS" && (
+                      {req.category === "GOODS" && (
                         <>
                           <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC}</strong></div>
                           <div><span className="text-gray-400">Ціна SOL:</span> <strong className="text-gray-700">{req.data.priceSOL}</strong></div>
@@ -550,27 +591,27 @@ export default function MarketplacePage() {
       )}
 
       {/* My Submissions Track Section */}
-      {isAuthenticated && moderationQueue.filter(r => r.userName === profileData.name).length > 0 && (
+      {isAuthenticated && moderationQueue.length > 0 && !isAdmin && (
         <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 space-y-6 shadow-sm">
           <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
             <Clock className="w-5 h-5 text-gray-500" />
             <div>
-              <h3 className="text-lg font-bold text-gray-900">Мої запити на публікацію (My Marketplace Offers)</h3>
+              <h3 className="text-lg font-bold text-gray-900">Мої пропозиції (My Marketplace Offers)</h3>
               <p className="text-xs text-gray-500">Відстеження статусу ваших пропозицій на маркетплейсі</p>
             </div>
           </div>
 
           <div className="space-y-3">
-            {moderationQueue.filter(r => r.userName === profileData.name).map(req => (
+            {moderationQueue.map(req => (
               <div key={req.id} className="p-4 border border-gray-100 rounded-xl flex items-center justify-between gap-4 text-sm bg-gray-50/30">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <strong className="text-gray-900">{req.data.name}</strong>
+                    <strong className="text-gray-900">{req.title}</strong>
                     <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-bold uppercase">
-                      {req.type}
+                      {req.category}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 line-clamp-1">{req.data.desc}</p>
+                  <p className="text-xs text-gray-500 line-clamp-1">{req.data?.desc || ""}</p>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -600,6 +641,60 @@ export default function MarketplacePage() {
 
       {/* Main Blocks Layout */}
       <div className="space-y-10">
+
+        {/* 0. INTELLECTUAL PROPERTY TOKENS (IPTs) (Symbiosis Feature) */}
+        {(activeCategory === "ALL" || activeCategory === "IPT") && filteredIpts.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+              <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500">
+                <CoinsIcon className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Intellectual Property Tokens (IPTs - Патенти)</h3>
+                <p className="text-xs text-gray-500">Інвестування в децентралізовані патенти та дослідження</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {filteredIpts.map((ipt) => (
+                <div key={ipt.id} className="card-soft p-5 border border-gray-100 rounded-2xl flex flex-col justify-between hover:border-amber-500/30 transition-all">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-start">
+                      <span className="text-xs text-gray-400 font-semibold">@{ipt.author}</span>
+                      <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/50 px-2 py-0.5 rounded">
+                        {ipt.royalty}% Royalty
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-gray-900 text-sm leading-snug h-12 line-clamp-2">{ipt.title}</h4>
+                    
+                    <div>
+                      <div className="flex justify-between text-xs font-semibold mb-1">
+                        <span className="text-gray-900">${formatNumber(ipt.raised)}</span>
+                        <span className="text-gray-400">Ціль: ${formatNumber(ipt.goal)}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-150/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-amber-500 rounded-full" 
+                          style={{ width: `${Math.min(100, ipt.progress)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-6">
+                    <span className="text-xs text-gray-400">{ipt.participants} інвесторів</span>
+                    <button 
+                      onClick={() => alert(`Fund simulation triggered for ${ipt.title}`)}
+                      className="px-3.5 py-1.5 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-colors"
+                    >
+                      Fund Research
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         
         {/* 1. AI AGENTS SECTION */}
         {(activeCategory === "ALL" || activeCategory === "AI") && filteredAI.length > 0 && (
@@ -640,7 +735,7 @@ export default function MarketplacePage() {
                     </div>
                     <button
                       onClick={() => setRentAgent(agent)}
-                      className="btn-primary py-2 px-6 text-xs w-full md:w-auto mt-2"
+                      className="btn-primary py-2 px-6 text-xs w-full md:w-auto mt-2 cursor-pointer"
                     >
                       Hire Agent
                     </button>
@@ -693,7 +788,7 @@ export default function MarketplacePage() {
                     <div className="text-xs text-gray-400">Включає автоматичний звіт Vexy AI</div>
                     <button
                       onClick={() => setBookLab(lab)}
-                      className="py-2.5 px-6 bg-gray-900 text-white rounded-xl font-bold text-xs hover:bg-gray-800 transition-colors w-full md:w-auto mt-2"
+                      className="py-2.5 px-6 bg-gray-900 text-white rounded-xl font-bold text-xs hover:bg-gray-800 transition-colors w-full md:w-auto mt-2 cursor-pointer"
                     >
                       Book Slot
                     </button>
@@ -733,11 +828,11 @@ export default function MarketplacePage() {
                       Ціна: <span className="font-bold text-gray-900 text-base">{product.priceUSDC} USDC</span>
                     </div>
                     <div className="text-xs text-gray-500">
-                      або <span className="font-bold text-gray-900">{product.priceSOL} SOL</span>
+                      або <span className="font-bold text-gray-950">{product.priceSOL} SOL</span>
                     </div>
                     <button
                       onClick={() => setBuyProduct(product)}
-                      className="py-2.5 px-6 bg-amber-500 text-white rounded-xl font-bold text-xs hover:bg-amber-600 shadow-sm hover:shadow transition-all w-full md:w-auto mt-2"
+                      className="py-2.5 px-6 bg-amber-500 text-white rounded-xl font-bold text-xs hover:bg-amber-600 shadow-sm hover:shadow transition-all w-full md:w-auto mt-2 cursor-pointer"
                     >
                       Buy Now
                     </button>
@@ -774,7 +869,7 @@ export default function MarketplacePage() {
                 </h3>
                 <button 
                   onClick={() => { setRentAgent(null); setRentTxState("IDLE"); setApiKey(""); }} 
-                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm"
+                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
                 >
                   ✕
                 </button>
@@ -800,19 +895,18 @@ export default function MarketplacePage() {
                           className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                         />
                       </div>
-
                       <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Payment Currency</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Currency</label>
+                        <div className="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-xl">
+                          <button 
                             onClick={() => setRentCurrency("USDC")}
-                            className={`py-2 text-xs font-bold border rounded-lg transition-colors ${rentCurrency === 'USDC' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rentCurrency === 'USDC' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
                           >
                             USDC
                           </button>
-                          <button
+                          <button 
                             onClick={() => setRentCurrency("LVEX")}
-                            className={`py-2 text-xs font-bold border rounded-lg transition-colors ${rentCurrency === 'LVEX' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${rentCurrency === 'LVEX' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
                           >
                             LVEX
                           </button>
@@ -820,73 +914,77 @@ export default function MarketplacePage() {
                       </div>
                     </div>
 
-                    <div className="bg-green-50 border border-green-100 rounded-xl p-4 flex justify-between items-center">
-                      <span className="text-sm font-semibold text-green-800">Total Price:</span>
-                      <span className="text-lg font-bold text-green-700">
+                    <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-sm font-semibold">
+                      <span className="text-gray-500">Загальна вартість:</span>
+                      <span className="text-gray-900 text-lg">
                         {rentCurrency === "USDC" 
                           ? `${rentAgent.priceUSDC * rentDuration} USDC` 
                           : `${rentAgent.priceLVEX * rentDuration} LVEX`}
                       </span>
                     </div>
 
-                    <button
+                    <button 
                       onClick={handleRentAgent}
-                      className="w-full btn-primary py-3.5 flex items-center justify-center gap-2"
+                      className="w-full btn-primary py-3 flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      {isAuthenticated ? "Sign & Start Rental" : "Connect Wallet to Hire"}
+                      Provision Sandbox <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
                 )}
 
                 {rentTxState === "PROVISIONING" && (
-                  <div className="py-12 text-center space-y-4">
-                    <div className="w-12 h-12 border-4 border-gray-200 border-t-green-500 rounded-full animate-spin mx-auto"></div>
-                    <h4 className="font-bold text-gray-900 text-lg">Initializing Agent Environment...</h4>
-                    <p className="text-xs text-gray-500">Contacting sovereign validator node...</p>
+                  <div className="py-8 text-center space-y-4 font-mono text-xs text-green-700 bg-green-50 rounded-xl border border-green-100 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Terminal className="w-4 h-4 animate-pulse" />
+                      <strong>DOCKER ORCHESTRATION</strong>
+                    </div>
+                    <div className="space-y-1.5 text-left max-h-[140px] overflow-y-auto">
+                      {terminalLogs.map((log, i) => (
+                        <div key={i}>{log}</div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
                 {rentTxState === "TERMINAL" && (
-                  <div className="bg-gray-950 border border-gray-800 p-6 rounded-xl font-mono text-sm text-green-400 min-h-[220px] flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 text-green-500 border-b border-gray-900 pb-2 mb-2">
-                        <Terminal className="w-4 h-4" />
-                        <span className="text-xs font-bold uppercase tracking-wider">LABVEX Orchestrator v1</span>
-                      </div>
-                      {terminalLogs.map((log, idx) => (
-                        <div key={idx} className="text-xs leading-relaxed animate-in fade-in-20 duration-300">
-                          {log}
-                        </div>
+                  <div className="py-8 text-center space-y-4 font-mono text-xs text-green-700 bg-green-50 rounded-xl border border-green-100 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Terminal className="w-4 h-4 animate-pulse" />
+                      <strong>SIGN TRANSACTION</strong>
+                    </div>
+                    <div className="space-y-1.5 text-left max-h-[140px] overflow-y-auto">
+                      {terminalLogs.map((log, i) => (
+                        <div key={i}>{log}</div>
                       ))}
                     </div>
-                    <div className="w-12 h-3 bg-green-500 animate-pulse rounded-sm mt-4" />
+                    <button 
+                      onClick={handleRentAgent}
+                      className="mt-4 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-xs shadow-md cursor-pointer"
+                    >
+                      Confirm Signature
+                    </button>
                   </div>
                 )}
 
                 {rentTxState === "SUCCESS" && (
-                  <div className="space-y-6 text-center animate-in zoom-in duration-300 py-4">
-                    <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto" />
-                    <div>
-                      <h4 className="text-2xl font-bold text-gray-900">AI Agent Provisioned!</h4>
-                      <p className="text-sm text-gray-500 mt-1">Виділено безпечну ізольовану пісочницю.</p>
+                  <div className="space-y-6 text-center animate-in zoom-in duration-300">
+                    <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white shadow-lg">
+                      <CheckCircle2 className="w-10 h-10" />
                     </div>
-
-                    <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl text-left font-mono">
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mb-1">Your API Key (Do not share):</label>
-                      <div className="text-xs text-gray-800 font-bold bg-white p-2.5 border border-gray-100 rounded break-all select-all">
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900">Sandbox Deployed Successfully!</h4>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Ваш індивідуальний API-ключ для доступу до {rentAgent.name}:
+                      </p>
+                      <div className="mt-3 p-3 bg-gray-50 border border-gray-100 rounded-xl font-mono text-xs select-all text-gray-700 break-all">
                         {apiKey}
                       </div>
-                      <label className="block text-[10px] font-bold text-gray-400 uppercase mt-3 mb-1">Host Endpoint:</label>
-                      <div className="text-xs text-gray-500">
-                        https://api.labvex.org/v1/agents/{rentAgent.id}/run
-                      </div>
                     </div>
-
-                    <button
+                    <button 
                       onClick={() => { setRentAgent(null); setRentTxState("IDLE"); setApiKey(""); }}
-                      className="w-full py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
+                      className="w-full py-2.5 bg-gray-950 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer"
                     >
-                      Open API Console
+                      Workspace Ready
                     </button>
                   </div>
                 )}
@@ -896,9 +994,7 @@ export default function MarketplacePage() {
         )}
       </AnimatePresence>
 
-      {/* ========================================================================= */}
-      {/* MODAL 2: LaaS BOOKING */}
-      {/* ========================================================================= */}
+      {/* MODAL 2: LAB BOOKING */}
       <AnimatePresence>
         {bookLab && (
           <motion.div
@@ -911,16 +1007,16 @@ export default function MarketplacePage() {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
             >
               <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
                 <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
                   <FlaskConical className="w-5 h-5 text-blue-600" />
-                  Book Lab Capacity (LaaS)
+                  Book Lab Capacity
                 </h3>
                 <button 
-                  onClick={() => { setBookLab(null); setBookTxState("IDLE"); setBookDate(""); }} 
-                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm"
+                  onClick={() => { setBookLab(null); setBookTxState("IDLE"); }} 
+                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
                 >
                   ✕
                 </button>
@@ -931,94 +1027,76 @@ export default function MarketplacePage() {
                   <div className="space-y-6">
                     <div>
                       <h4 className="font-bold text-gray-900 text-base">{bookLab.name}</h4>
-                      <div className="text-xs text-gray-400 flex items-center gap-1 mt-1">
-                        <MapPin className="w-3.5 h-3.5 text-gray-400" /> {bookLab.location}
-                      </div>
+                      <p className="text-xs text-gray-400 flex items-center gap-1 mt-1">
+                        <MapPin className="w-3.5 h-3.5" /> {bookLab.location}
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Start Date</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Target Date</label>
                         <input
                           type="date"
                           value={bookDate}
                           onChange={(e) => setBookDate(e.target.value)}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         />
                       </div>
-
                       <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Duration (Days)</label>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Days / Slots</label>
                         <input
                           type="number"
                           min="1"
                           max="30"
                           value={bookDays}
                           onChange={(e) => setBookDays(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                         />
                       </div>
                     </div>
 
-                    <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex justify-between items-center">
-                      <span className="text-sm font-semibold text-blue-800">Total Booking Price:</span>
-                      <span className="text-lg font-bold text-blue-700">
+                    <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-sm font-semibold">
+                      <span className="text-gray-500">Загальна вартість:</span>
+                      <span className="text-gray-900 text-lg">
                         {bookLab.priceUSDC * bookDays} USDC
                       </span>
                     </div>
 
-                    <button
-                      disabled={isAuthenticated && !bookDate}
+                    <button 
+                      disabled={!bookDate}
                       onClick={handleBookLab}
-                      className="w-full py-3.5 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
-                      {isAuthenticated ? "Book & Sign Reservation" : "Connect Wallet to Book"}
+                      Book Hardware Slot
                     </button>
                   </div>
                 )}
 
                 {bookTxState === "PROCESSING" && (
                   <div className="py-12 text-center space-y-4">
-                    <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-500 rounded-full animate-spin mx-auto"></div>
-                    <h4 className="font-bold text-gray-900 text-lg">Creating Smart Contract Lease...</h4>
-                    <p className="text-xs text-gray-500">Checking slot availability & reserving hardware...</p>
+                    <div className="w-12 h-12 border-4 border-gray-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
+                    <h4 className="font-bold text-gray-900 text-base">Booking slots in Laboratory ledger...</h4>
+                    <p className="text-xs text-gray-500 font-mono">Simulating decentralized hardware scheduling</p>
                   </div>
                 )}
 
                 {bookTxState === "SUCCESS" && (
-                  <div className="space-y-6 text-center animate-in zoom-in duration-300 py-4">
-                    <CheckCircle2 className="w-16 h-16 text-blue-500 mx-auto" />
+                  <div className="space-y-6 text-center animate-in zoom-in duration-300">
+                    <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto text-white shadow-lg">
+                      <CheckCircle2 className="w-10 h-10" />
+                    </div>
                     <div>
-                      <h4 className="text-2xl font-bold text-gray-900">Lab Capacity Booked!</h4>
-                      <p className="text-sm text-gray-500 mt-1">Оренду обладнання успішно зафіксовано на блокчейні.</p>
+                      <h4 className="text-xl font-bold text-gray-900">Lab Capacity Booked!</h4>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Ваш запит на оренду {bookDays} днів у {bookLab.name} схвалено.
+                        Перейдіть у розділ **My Labs** для налаштування API.
+                      </p>
                     </div>
-
-                    <div className="bg-blue-50 border border-blue-100 p-5 rounded-xl text-left space-y-3">
-                      <div className="flex justify-between border-b border-blue-200/50 pb-2">
-                        <span className="text-xs font-medium text-blue-800">Установка:</span>
-                        <span className="text-xs font-bold text-blue-900">{bookLab.name}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-blue-200/50 pb-2">
-                        <span className="text-xs font-medium text-blue-800">Дата початку:</span>
-                        <span className="text-xs font-bold text-blue-900">{bookDate}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-blue-200/50 pb-2">
-                        <span className="text-xs font-medium text-blue-800">Тривалість:</span>
-                        <span className="text-xs font-bold text-blue-900">{bookDays} дн.</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs font-medium text-blue-800">Статус оренди:</span>
-                        <span className="text-xs font-bold text-green-700 flex items-center gap-1">
-                          <ShieldCheck className="w-3.5 h-3.5" /> Підтверджено (Leased)
-                        </span>
-                      </div>
-                    </div>
-
-                    <button
+                    <button 
                       onClick={() => { setBookLab(null); setBookTxState("IDLE"); setBookDate(""); }}
-                      className="w-full py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
+                      className="w-full py-2.5 bg-gray-950 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer"
                     >
-                      Go to My Bookings
+                      Confirm Booking
                     </button>
                   </div>
                 )}
@@ -1028,9 +1106,7 @@ export default function MarketplacePage() {
         )}
       </AnimatePresence>
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: GOODS PURCHASE */}
-      {/* ========================================================================= */}
+      {/* MODAL 3: PRODUCT BUYING */}
       <AnimatePresence>
         {buyProduct && (
           <motion.div
@@ -1043,16 +1119,16 @@ export default function MarketplacePage() {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
             >
               <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
                 <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
                   <Hammer className="w-5 h-5 text-amber-500" />
-                  Order Materials
+                  Order Material ZK-1
                 </h3>
                 <button 
                   onClick={() => { setBuyProduct(null); setBuyTxState("IDLE"); setShippingAddress(""); }} 
-                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm"
+                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
                 >
                   ✕
                 </button>
@@ -1063,7 +1139,7 @@ export default function MarketplacePage() {
                   <div className="space-y-6">
                     <div>
                       <h4 className="font-bold text-gray-900 text-base">{buyProduct.name}</h4>
-                      <p className="text-sm text-gray-500 mt-1">{buyProduct.desc}</p>
+                      <p className="text-xs text-gray-500 mt-1">{buyProduct.desc}</p>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -1072,25 +1148,24 @@ export default function MarketplacePage() {
                         <input
                           type="number"
                           min="1"
-                          max="20"
+                          max="10"
                           value={buyQty}
                           onChange={(e) => setBuyQty(Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
                         />
                       </div>
-
                       <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Token</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Currency</label>
+                        <div className="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-xl">
+                          <button 
                             onClick={() => setBuyCurrency("USDC")}
-                            className={`py-2 text-xs font-bold border rounded-lg transition-colors ${buyCurrency === 'USDC' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${buyCurrency === 'USDC' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
                           >
                             USDC
                           </button>
-                          <button
+                          <button 
                             onClick={() => setBuyCurrency("SOL")}
-                            className={`py-2 text-xs font-bold border rounded-lg transition-colors ${buyCurrency === 'SOL' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'}`}
+                            className={`py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${buyCurrency === 'SOL' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
                           >
                             SOL
                           </button>
@@ -1100,30 +1175,30 @@ export default function MarketplacePage() {
 
                     <div>
                       <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Shipping Address</label>
-                      <textarea
+                      <input
+                        type="text"
                         value={shippingAddress}
                         onChange={(e) => setShippingAddress(e.target.value)}
-                        placeholder="вул. Наукова, 12, Київ, Україна, 01001"
-                        rows={2}
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-sm"
+                        placeholder="Street, City, Zip, Country"
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-sm"
                       />
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex justify-between items-center">
-                      <span className="text-sm font-semibold text-amber-800">Total Price:</span>
-                      <span className="text-lg font-bold text-amber-700">
+                    <div className="border-t border-gray-100 pt-4 flex justify-between items-center text-sm font-semibold">
+                      <span className="text-gray-500">Загальна вартість:</span>
+                      <span className="text-gray-900 text-lg">
                         {buyCurrency === "USDC" 
                           ? `${buyProduct.priceUSDC * buyQty} USDC` 
                           : `${(buyProduct.priceSOL * buyQty).toFixed(2)} SOL`}
                       </span>
                     </div>
 
-                    <button
-                      disabled={isAuthenticated && !shippingAddress}
+                    <button 
+                      disabled={!shippingAddress}
                       onClick={handleBuyProduct}
-                      className="w-full py-3.5 bg-amber-500 text-white font-bold rounded-xl hover:bg-amber-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow"
+                      className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                     >
-                      {isAuthenticated ? "Sign & Pay on Solana" : "Connect Wallet to Purchase"}
+                      Sign Web3 Transaction
                     </button>
                   </div>
                 )}
@@ -1131,47 +1206,36 @@ export default function MarketplacePage() {
                 {buyTxState === "SIGNING" && (
                   <div className="py-12 text-center space-y-4">
                     <div className="w-12 h-12 border-4 border-gray-200 border-t-amber-500 rounded-full animate-spin mx-auto"></div>
-                    <h4 className="font-bold text-gray-900 text-lg">Awaiting Wallet Signature...</h4>
-                    <p className="text-xs text-gray-500">Please sign the transaction in your Phantom/Solflare extension...</p>
+                    <h4 className="font-bold text-gray-900 text-base">Requesting Wallet Signature...</h4>
+                    <p className="text-xs text-gray-500 font-mono">Sign the smart contract call to proceed</p>
                   </div>
                 )}
 
                 {buyTxState === "CONFIRMING" && (
                   <div className="py-12 text-center space-y-4">
                     <div className="w-12 h-12 border-4 border-gray-200 border-t-amber-500 rounded-full animate-spin mx-auto"></div>
-                    <h4 className="font-bold text-gray-900 text-lg">Broadcasting Transaction...</h4>
-                    <p className="text-xs text-gray-500">Solana cluster confirmation in progress...</p>
+                    <h4 className="font-bold text-gray-900 text-base">Waiting for Solana Block confirmation...</h4>
+                    <p className="text-xs text-gray-500 font-mono">Updating R&D logistics ledger</p>
                   </div>
                 )}
 
                 {buyTxState === "SUCCESS" && (
-                  <div className="space-y-6 text-center animate-in zoom-in duration-300 py-4">
-                    <CheckCircle2 className="w-16 h-16 text-amber-500 mx-auto" />
+                  <div className="space-y-6 text-center animate-in zoom-in duration-300">
+                    <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center mx-auto text-white shadow-lg">
+                      <CheckCircle2 className="w-10 h-10" />
+                    </div>
                     <div>
-                      <h4 className="text-2xl font-bold text-gray-900">Purchase Confirmed!</h4>
-                      <p className="text-sm text-gray-500 mt-1">Оплату успішно підтверджено в блокчейні.</p>
+                      <h4 className="text-xl font-bold text-gray-900">Transaction Confirmed!</h4>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Вашу транзакцію на {buyCurrency === "USDC" ? `${buyProduct.priceUSDC * buyQty} USDC` : `${(buyProduct.priceSOL * buyQty).toFixed(2)} SOL`} успішно проведено.
+                        Очікуйте на доставку за адресою: <strong className="text-gray-900">{shippingAddress}</strong>.
+                      </p>
                     </div>
-
-                    <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl text-left space-y-2">
-                      <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                        <span className="text-xs text-gray-500">Товар:</span>
-                        <span className="text-xs font-bold text-gray-800">{buyProduct.name} (x{buyQty})</span>
-                      </div>
-                      <div className="flex justify-between border-b border-gray-100 pb-1.5">
-                        <span className="text-xs text-gray-500">Доставка:</span>
-                        <span className="text-xs font-semibold text-gray-700 truncate max-w-[200px]">{shippingAddress}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-xs text-gray-500">Tx Hash:</span>
-                        <span className="text-xs font-mono text-amber-600">5fT9Z2...p9s7</span>
-                      </div>
-                    </div>
-
-                    <button
+                    <button 
                       onClick={() => { setBuyProduct(null); setBuyTxState("IDLE"); setShippingAddress(""); }}
-                      className="w-full py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
+                      className="w-full py-2.5 bg-gray-950 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer"
                     >
-                      Track Shipment
+                      Awesome
                     </button>
                   </div>
                 )}
@@ -1181,9 +1245,7 @@ export default function MarketplacePage() {
         )}
       </AnimatePresence>
 
-      {/* ========================================================================= */}
-      {/* MODAL 4: SUBMIT NEW OFFER */}
-      {/* ========================================================================= */}
+      {/* SUBMIT OFFER MODAL */}
       <AnimatePresence>
         {showSubmitModal && (
           <motion.div
@@ -1196,101 +1258,95 @@ export default function MarketplacePage() {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="w-full max-w-lg bg-white rounded-2xl shadow-2xl overflow-hidden"
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 relative overflow-hidden"
             >
-              <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
+              <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-3">
                 <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                  <Plus className="w-5 h-5 text-green-600" />
-                  Створення нової пропозиції
+                  <Store className="w-5 h-5 text-green-600" />
+                  Створити пропозицію на ринок
                 </h3>
                 <button 
                   onClick={() => setShowSubmitModal(false)} 
-                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
+                  className="text-gray-400 hover:text-gray-700 bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
-              <form onSubmit={handleSubmitOffer} className="p-6 space-y-4">
+              <form onSubmit={handleSubmitOffer} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
-                    {role === "DEVELOPER" && "Назва AI-Агента"}
-                    {role === "LABORATORY" && "Назва обладнання / установки"}
-                    {(role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && "Назва товару / матеріалу"}
-                  </label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Назва послуги / товару</label>
                   <input
                     type="text"
-                    required
                     value={submitName}
                     onChange={(e) => setSubmitName(e.target.value)}
-                    placeholder="Введіть назву..."
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                    placeholder="e.g. Next-Gen Gene Sequencing"
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                    required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Опис</label>
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Опис пропозиції</label>
                   <textarea
-                    required
-                    rows={3}
                     value={submitDesc}
                     onChange={(e) => setSubmitDesc(e.target.value)}
-                    placeholder="Детальний опис вашої пропозиції..."
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                    placeholder="Опишіть ваші можливості, специфікації чи умови..."
+                    className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20 resize-none"
+                    rows={3}
+                    required
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ціна (USDC)</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ціна (USDC)</label>
                     <input
                       type="number"
-                      required
-                      min="1"
                       value={submitPriceUSDC}
                       onChange={(e) => setSubmitPriceUSDC(e.target.value)}
-                      placeholder="Ціна в USDC"
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      placeholder="e.g. 150"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                      required
                     />
                   </div>
 
                   {role === "DEVELOPER" && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ціна (LVEX)</label>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ціна (LVEX)</label>
                       <input
                         type="number"
-                        min="1"
                         value={submitPriceLVEX}
                         onChange={(e) => setSubmitPriceLVEX(e.target.value)}
-                        placeholder="LVEX ціна"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                        placeholder="e.g. 600"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                       />
                     </div>
                   )}
 
                   {role === "LABORATORY" && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Локація</label>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Локація</label>
                       <input
                         type="text"
                         value={submitLocation}
                         onChange={(e) => setSubmitLocation(e.target.value)}
-                        placeholder="Наприклад: Київ, Україна"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                        placeholder="e.g. Берлін, Німеччина"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                       />
                     </div>
                   )}
 
                   {(role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && (
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ціна (SOL)</label>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ціна (SOL)</label>
                       <input
                         type="number"
                         step="0.01"
                         value={submitPriceSOL}
                         onChange={(e) => setSubmitPriceSOL(e.target.value)}
-                        placeholder="SOL ціна"
-                        className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                        placeholder="e.g. 1.2"
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                       />
                     </div>
                   )}
@@ -1298,62 +1354,54 @@ export default function MarketplacePage() {
 
                 {role === "DEVELOPER" && (
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Тип / Категорія ШІ</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Категорія AI-агента</label>
                     <input
                       type="text"
                       value={submitAgentType}
                       onChange={(e) => setSubmitAgentType(e.target.value)}
-                      placeholder="Наприклад: Quantum Computing, Data Auditing"
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      placeholder="e.g. Data Analysis, Compliance"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                     />
                   </div>
                 )}
 
                 {role === "LABORATORY" && (
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Характеристики / Специфікації (через кому)</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Характеристики (Specs через кому)</label>
                     <input
                       type="text"
                       value={submitSpecs}
                       onChange={(e) => setSubmitSpecs(e.target.value)}
-                      placeholder="He-4 cooling, Ultra-vacuum, Remote control"
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      placeholder="e.g. He-4 Cooling, remote control"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                     />
                   </div>
                 )}
 
                 {(role === "COMPANY" || role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE") && (
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Наявність на складі (Stock)</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Стан наявності</label>
                     <input
                       type="text"
                       value={submitStock}
                       onChange={(e) => setSubmitStock(e.target.value)}
-                      placeholder="Наприклад: 5 одиниць в наявності"
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                      placeholder="e.g. 5 одиниць в наявності"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                     />
                   </div>
                 )}
 
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-start gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Зверніть увагу:</strong> Ваша пропозиція буде надіслана до черги ручної перевірки. Вона буде опублікована на маркетплейсі одразу після схвалення адміністратором.
-                  </span>
-                </div>
-
                 <button
                   type="submit"
-                  className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-md transition-colors text-sm cursor-pointer"
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold shadow hover:shadow-md transition-all bg-gray-950 text-white hover:bg-black rounded-xl mt-4 cursor-pointer"
                 >
-                  Надіслати на модерацію
+                  <Send className="w-4 h-4" /> Надіслати на модерацію
                 </button>
               </form>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
-
     </section>
   );
 }

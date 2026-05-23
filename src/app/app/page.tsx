@@ -9,36 +9,20 @@ import { Lock, Sparkles, BookOpen, Send, Award, CheckCircle } from "lucide-react
 interface Post {
   id: string;
   title: string;
-  author: string;
-  authorRole: string;
-  txHash: string;
   content: string;
-  category?: string;
-  tags?: string[];
+  category: string;
+  tags: string[];
+  upvotes: number;
+  casFlag: boolean;
+  aiSummary: string | null;
+  createdAt: string;
+  author: {
+    username: string;
+    displayName: string | null;
+    role: string;
+    reputationScore: number;
+  };
 }
-
-const initialPosts: Post[] = [
-  {
-    id: "1",
-    title: "Observation of Anomalous Thrust in Asymmetric Capacitors",
-    author: "Dr. E. Brown",
-    authorRole: "VERIFIED_PHYSICIST",
-    txHash: "0x8f2c9...3a2b",
-    category: "Propulsion",
-    tags: ["Biefeld-Brown", "Vacuum-Thrust", "EHD"],
-    content: "Observed significant thrust variations in asymmetric capacitor arrays at 40kV in a hard vacuum (10^-6 Torr). This challenges the standard ion wind interpretation of the Biefeld-Brown effect. Uploading sensor logs for community review. If verified, this could necessitate a rethinking of electrohydrodynamic equations under extreme conditions."
-  },
-  {
-    id: "2",
-    title: "Replicating the Podkletnov Superconductor Gravity Shielding",
-    author: "Dr. V. K.",
-    authorRole: "NOBEL_LAUREATE",
-    txHash: "0x9a1b2...4c5d",
-    category: "Superconductors",
-    tags: ["Gravity-Shielding", "Podkletnov", "YBCO"],
-    content: "Spinning a YBCO superconductor disk at 5000 RPM at 70K. Initial gravimeter readings show a consistent 0.05% weight reduction in the object suspended above. Looking for Citizen Explorers to run noise-cancellation analysis on our gravimeter raw data. The seismic interference is significant, making it hard to isolate the anomaly."
-  }
-];
 
 const defaultCategories = [
   "Propulsion",
@@ -52,11 +36,12 @@ const defaultCategories = [
 ];
 
 export default function FeedPage() {
-  const { role, profileData, isAuthenticated, gainReputation, openAuthModal } = useAuth();
+  const { role, profileData, isAuthenticated, gainReputation, openAuthModal, isAdmin } = useAuth();
   
   const [mounted, setMounted] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
   const [categories, setCategories] = useState<string[]>(defaultCategories);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Form states
   const [title, setTitle] = useState("");
@@ -72,47 +57,48 @@ export default function FeedPage() {
   // Toast state
   const [showToast, setShowToast] = useState(false);
 
-  // Load from localStorage
+  const fetchPosts = async () => {
+    setIsLoading(true);
+    try {
+      const url = `/api/posts?category=${activeCategory}${activeTag ? `&tag=${activeTag}` : ""}`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setPosts(data);
+      }
+    } catch (e) {
+      console.error("Error loading posts from database:", e);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Load from database & localStorage
   useEffect(() => {
     setMounted(true);
-    const savedPosts = localStorage.getItem("labvex_feed_posts");
     const savedCategories = localStorage.getItem("labvex_feed_categories");
-    
-    if (savedPosts) {
-      try {
-        setPosts(JSON.parse(savedPosts));
-      } catch (e) {
-        setPosts(initialPosts);
-      }
-    } else {
-      setPosts(initialPosts);
-      localStorage.setItem("labvex_feed_posts", JSON.stringify(initialPosts));
-    }
-
     if (savedCategories) {
       try {
         setCategories(JSON.parse(savedCategories));
       } catch (e) {
         setCategories(defaultCategories);
       }
-    } else {
-      setCategories(defaultCategories);
-      localStorage.setItem("labvex_feed_categories", JSON.stringify(defaultCategories));
     }
   }, []);
 
-  // Save to localStorage
   useEffect(() => {
-    if (!mounted) return;
-    localStorage.setItem("labvex_feed_posts", JSON.stringify(posts));
-  }, [posts, mounted]);
+    if (mounted) {
+      fetchPosts();
+    }
+  }, [mounted, activeCategory, activeTag]);
 
+  // Save categories to localStorage
   useEffect(() => {
     if (!mounted) return;
     localStorage.setItem("labvex_feed_categories", JSON.stringify(categories));
   }, [categories, mounted]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
 
@@ -126,47 +112,53 @@ export default function FeedPage() {
       }
     }
 
-    const tagsArray = tagsInput
-      ? tagsInput.split(",").map(t => t.trim()).filter(t => t.length > 0)
-      : [];
+    try {
+      const res = await fetch("/api/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          content,
+          category: finalCategory,
+          tags: tagsInput,
+        }),
+      });
 
-    const randHex1 = Math.floor(Math.random() * 65536).toString(16).padStart(4, "0");
-    const randHex2 = Math.floor(Math.random() * 65536).toString(16).padStart(4, "0");
-    const txHash = `0x${randHex1}...${randHex2}`;
-
-    const newPost: Post = {
-      id: Date.now().toString(),
-      title,
-      author: profileData.name || "Anonymous",
-      authorRole: role,
-      txHash,
-      content,
-      category: finalCategory,
-      tags: tagsArray
-    };
-
-    setPosts(prev => [newPost, ...prev]);
-    setTitle("");
-    setContent("");
-    setTagsInput("");
-    setCustomCategory("");
-    if (category === "CUSTOM") {
-      setCategory(finalCategory);
+      if (res.ok) {
+        setTitle("");
+        setContent("");
+        setTagsInput("");
+        setCustomCategory("");
+        if (category === "CUSTOM") {
+          setCategory(finalCategory);
+        }
+        
+        // Reload posts and trigger success toast
+        await fetchPosts();
+        gainReputation(50);
+        
+        setShowToast(true);
+        setTimeout(() => {
+          setShowToast(false);
+        }, 4000);
+      }
+    } catch (error) {
+      console.error("Failed to publish post:", error);
     }
-    
-    // Reward 50 Reputation points
-    gainReputation(50);
-    
-    // Trigger success toast
-    setShowToast(true);
-    setTimeout(() => {
-      setShowToast(false);
-    }, 4000);
   };
 
-  const handleDeletePost = (postId: string) => {
+  const handleDeletePost = async (postId: string) => {
     if (confirm("Ви впевнені, що хочете видалити цю публікацію? (Дія безповоротна)")) {
-      setPosts(prev => prev.filter(p => p.id !== postId));
+      try {
+        const res = await fetch(`/api/posts/${postId}`, {
+          method: "DELETE",
+        });
+        if (res.ok) {
+          fetchPosts();
+        }
+      } catch (e) {
+        console.error("Failed to delete post:", e);
+      }
     }
   };
 
@@ -185,17 +177,6 @@ export default function FeedPage() {
         return "Share R&D Finding or Hypothesis";
     }
   };
-
-  // Filter posts
-  const filteredPosts = posts.filter(post => {
-    if (activeCategory !== "ALL" && post.category !== activeCategory) {
-      return false;
-    }
-    if (activeTag && (!post.tags || !post.tags.includes(activeTag))) {
-      return false;
-    }
-    return true;
-  });
 
   if (!mounted) {
     return (
@@ -270,7 +251,7 @@ export default function FeedPage() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Назва вашої публікації або оновлення..."
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-950 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
                 required
               />
               <input 
@@ -278,14 +259,14 @@ export default function FeedPage() {
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="Теги (через кому, наприклад: Vacuum-Thrust, Quantum, Orbit)..."
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-950 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
               />
             </div>
             <div className="space-y-3">
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-950 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors cursor-pointer"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors cursor-pointer"
               >
                 {categories.map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
@@ -299,7 +280,7 @@ export default function FeedPage() {
                   value={customCategory}
                   onChange={(e) => setCustomCategory(e.target.value)}
                   placeholder="Назва нової категорії..."
-                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-950 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors"
                   required
                 />
               )}
@@ -312,7 +293,7 @@ export default function FeedPage() {
               onChange={(e) => setContent(e.target.value)}
               placeholder="Деталізуйте ваші результати, методологію, аномалії чи журнали телеметрії. Весь вміст хешується в блокчейні..."
               rows={4}
-              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-950 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors resize-none"
+              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20 focus:border-green-500 transition-colors resize-none"
               required
             />
           </div>
@@ -335,7 +316,7 @@ export default function FeedPage() {
           {(activeCategory !== "ALL" || activeTag) && (
             <button 
               onClick={() => { setActiveCategory("ALL"); setActiveTag(null); }}
-              className="text-xs text-red-500 hover:text-red-600 font-bold transition-colors cursor-pointer"
+              className="text-xs text-red-500 hover:text-red-650 font-bold transition-colors cursor-pointer"
             >
               Очистити фільтри
             </button>
@@ -372,7 +353,7 @@ export default function FeedPage() {
         {/* Active Tag Filter Status */}
         {activeTag && (
           <div className="flex items-center gap-2 bg-green-50 border border-green-200/50 rounded-xl px-3 py-1.5 text-xs font-semibold text-green-800 self-start animate-in fade-in duration-200">
-            <span>Фільтр за тегом: <strong className="text-green-950 font-bold">#{activeTag}</strong></span>
+            <span>Фільтр за тегом: <strong className="text-green-955 font-bold">#{activeTag}</strong></span>
             <button 
               onClick={() => setActiveTag(null)}
               className="w-4.5 h-4.5 rounded-full bg-green-100 hover:bg-green-200 text-green-800 flex items-center justify-center font-bold transition-colors cursor-pointer"
@@ -385,21 +366,32 @@ export default function FeedPage() {
 
       {/* Posts List */}
       <div className="space-y-4">
-        {filteredPosts.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12 space-y-3">
+            <div className="w-10 h-10 border-4 border-gray-200 border-t-green-500 rounded-full animate-spin"></div>
+            <span className="text-xs text-gray-400 font-mono">Syncing scientific feed with database...</span>
+          </div>
+        ) : posts.length === 0 ? (
           <div className="card-soft p-12 text-center bg-white border border-gray-200 rounded-2xl">
             <p className="text-sm text-gray-500">Не знайдено публікацій у вибраному фільтрі.</p>
           </div>
         ) : (
-          filteredPosts.map(post => (
+          posts.map(post => (
             <PostCard 
               key={post.id}
+              id={post.id}
               title={post.title}
-              author={post.author}
-              authorRole={post.authorRole}
-              txHash={post.txHash}
+              author={post.author.displayName || post.author.username || "Anonymous"}
+              authorRole={post.author.role}
+              authorReputation={post.author.reputationScore}
+              txHash={post.id.substring(0, 10) + "...dev"}
               content={post.content}
               category={post.category}
               tags={post.tags}
+              upvotes={post.upvotes}
+              casFlag={post.casFlag}
+              aiSummary={post.aiSummary}
+              createdAt={post.createdAt}
               onTagClick={(tag: string) => setActiveTag(tag)}
               onCategoryClick={(cat: string) => setActiveCategory(cat)}
               onDelete={() => handleDeletePost(post.id)}

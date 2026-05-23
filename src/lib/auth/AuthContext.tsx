@@ -2,8 +2,19 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { useSession, signIn, signOut } from "next-auth/react";
+import bs58 from "bs58";
 
-export type UserRole = "GUEST" | "CITIZEN_EXPLORER" | "VERIFIED_PHYSICIST" | "NOBEL_LAUREATE" | "DEVELOPER" | "LABORATORY" | "COMPANY";
+export type UserRole = 
+  | "GUEST" 
+  | "MEMBER"
+  | "CITIZEN_EXPLORER" 
+  | "VERIFIED_PHYSICIST" 
+  | "NOBEL_LAUREATE" 
+  | "DEVELOPER" 
+  | "LABORATORY" 
+  | "COMPANY"
+  | "ADMIN";
 
 export interface UserProfileData {
   name: string;
@@ -25,12 +36,12 @@ interface AuthContextType {
   reputation: number;
   profileData: UserProfileData;
   loginWithGoogle: () => void;
-  onboardCitizen: (selectedInterests: string[]) => void;
-  onboardScientist: (orcid: string) => void;
-  onboardDeveloper: (github: string) => void;
-  onboardLaboratory: (facilityName: string) => void;
-  onboardCompany: (companyName: string) => void;
-  gainReputation: (amount: number) => void;
+  onboardCitizen: (selectedInterests: string[]) => Promise<void>;
+  onboardScientist: (orcid: string) => Promise<void>;
+  onboardDeveloper: (github: string) => Promise<void>;
+  onboardLaboratory: (facilityName: string) => Promise<void>;
+  onboardCompany: (companyName: string) => Promise<void>;
+  gainReputation: (amount: number) => Promise<void>;
   updateProfileData: (data: Partial<UserProfileData>) => void;
   toggleAdmin: () => void;
   logout: () => void;
@@ -60,12 +71,12 @@ const AuthContext = createContext<AuthContextType>({
     customTags: [],
   },
   loginWithGoogle: () => {},
-  onboardCitizen: () => {},
-  onboardScientist: () => {},
-  onboardDeveloper: () => {},
-  onboardLaboratory: () => {},
-  onboardCompany: () => {},
-  gainReputation: () => {},
+  onboardCitizen: async () => {},
+  onboardScientist: async () => {},
+  onboardDeveloper: async () => {},
+  onboardLaboratory: async () => {},
+  onboardCompany: async () => {},
+  gainReputation: async () => {},
   updateProfileData: () => {},
   toggleAdmin: () => {},
   logout: () => {},
@@ -78,11 +89,12 @@ const AuthContext = createContext<AuthContextType>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { connected, disconnect } = useWallet();
+  const { connected, publicKey, signMessage, disconnect } = useWallet();
+  const { data: session, status, update: updateSession } = useSession();
+
   const [role, setRole] = useState<UserRole>("GUEST");
   const [isAdmin, setIsAdmin] = useState(false);
   const [isZKVerified, setIsZKVerified] = useState(false);
-  const [isGoogleLoggedIn, setIsGoogleLoggedIn] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
   const [orcid, setOrcid] = useState<string | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -97,63 +109,78 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     customCategories: [],
     customTags: [],
   });
+  
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Load state from localStorage on mount
+  // Solana Wallet Login Hook: auto triggers signature when connected but not signed in
   useEffect(() => {
-    const savedRole = localStorage.getItem("labvex_role") as UserRole | null;
-    const savedReputation = localStorage.getItem("labvex_reputation");
-    const savedProfile = localStorage.getItem("labvex_profile");
-    const savedOrcid = localStorage.getItem("labvex_orcid");
-    const savedInterests = localStorage.getItem("labvex_interests");
-    const savedZK = localStorage.getItem("labvex_zk");
-    const savedAdmin = localStorage.getItem("labvex_admin");
-    const savedGoogle = localStorage.getItem("labvex_google");
+    const handleSolanaLogin = async () => {
+      if (publicKey && signMessage && status === "unauthenticated") {
+        try {
+          const nonce = Math.floor(Math.random() * 1000000);
+          const message = `Sign this message to prove you own this wallet for LABVEX.\n\nNonce: ${nonce}`;
+          const messageBytes = new TextEncoder().encode(message);
+          
+          const signatureBytes = await signMessage(messageBytes);
+          const signature = bs58.encode(signatureBytes);
 
-    if (savedRole) setRole(savedRole);
-    if (savedReputation) setReputation(Number(savedReputation));
-    if (savedProfile) {
-      try {
-        setProfileData(JSON.parse(savedProfile));
-      } catch (e) {
-        console.error("Error parsing profile data from localStorage", e);
+          await signIn("solana", {
+            message,
+            signature,
+            publicKey: publicKey.toBase58(),
+            redirect: false,
+          });
+        } catch (e) {
+          console.error("Solana credentials sign-in rejected or failed", e);
+          disconnect();
+        }
       }
-    }
-    if (savedOrcid) setOrcid(savedOrcid);
-    if (savedInterests) {
-      try {
-        setInterests(JSON.parse(savedInterests));
-      } catch (e) {}
-    }
-    if (savedZK) setIsZKVerified(savedZK === "true");
-    if (savedAdmin) setIsAdmin(savedAdmin === "true");
-    if (savedGoogle) setIsGoogleLoggedIn(savedGoogle === "true");
+    };
+    handleSolanaLogin();
+  }, [publicKey, signMessage, status, disconnect]);
 
-    setIsInitializing(false);
-  }, []);
-
-  // Save state to localStorage whenever it changes (after initialization is complete)
+  // Sync state with NextAuth Session
   useEffect(() => {
-    if (isInitializing) return;
-    localStorage.setItem("labvex_role", role);
-    localStorage.setItem("labvex_reputation", String(reputation));
-    localStorage.setItem("labvex_profile", JSON.stringify(profileData));
-    localStorage.setItem("labvex_orcid", orcid || "");
-    localStorage.setItem("labvex_interests", JSON.stringify(interests));
-    localStorage.setItem("labvex_zk", String(isZKVerified));
-    localStorage.setItem("labvex_admin", String(isAdmin));
-    localStorage.setItem("labvex_google", String(isGoogleLoggedIn));
-  }, [role, reputation, profileData, orcid, interests, isZKVerified, isAdmin, isGoogleLoggedIn, isInitializing]);
+    if (status === "loading") return;
 
-  useEffect(() => {
-    // Basic sync: if disconnected from both, reset to GUEST.
-    // The actual role elevation happens inside the onboard functions.
-    if (isInitializing) return;
-    if (!connected && !isGoogleLoggedIn) {
+    if (status === "authenticated" && session?.user) {
+      // @ts-ignore
+      const dbRole = session.user.role as UserRole;
+      setRole(dbRole || "MEMBER");
+      // @ts-ignore
+      setReputation(session.user.reputationScore ?? 1200);
+      setIsAdmin(dbRole === "ADMIN");
+      // @ts-ignore
+      setIsZKVerified(dbRole === "VERIFIED_PHYSICIST" || dbRole === "NOBEL_LAUREATE" || dbRole === "LABORATORY");
+      
+      // Parse bio if ORCID is embedded
+      // @ts-ignore
+      const userBio = session.user.bio || "";
+      const orcidMatch = userBio.match(/ORCID:\s*([0-9a-zA-Z-]+)/);
+      if (orcidMatch) {
+        setOrcid(orcidMatch[1]);
+      }
+
+      setProfileData(prev => ({
+        ...prev,
+        // @ts-ignore
+        name: session.user.displayName || session.user.name || "Researcher",
+        // @ts-ignore
+        bio: session.user.bio || "",
+        // @ts-ignore
+        avatar: session.user.image || "avatar1",
+      }));
+
+      // Auto-open Onboarding Modal for completely new GUEST users
+      // @ts-ignore
+      if (!session.user.isOnboarded && dbRole === "GUEST") {
+        setIsAuthModalOpen(true);
+      }
+    } else {
+      // Unauthenticated state resets
       setRole("GUEST");
-      setIsZKVerified(false);
       setIsAdmin(false);
-      setInterests([]);
+      setIsZKVerified(false);
       setOrcid(null);
       setReputation(1200);
       setProfileData({
@@ -167,101 +194,113 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         customTags: [],
       });
     }
-  }, [connected, isGoogleLoggedIn, isInitializing]);
+
+    setIsInitializing(false);
+  }, [session, status]);
 
   const loginWithGoogle = () => {
-    setIsGoogleLoggedIn(true);
+    signIn("google");
   };
 
-  const onboardCitizen = (selectedInterests: string[]) => {
-    setInterests(selectedInterests);
-    setRole("CITIZEN_EXPLORER");
-    setProfileData({
-      name: "Enthusiast Alex",
-      bio: "Citizen science enthusiast, looking for raw EHD data to filter and analyze.",
-      avatar: "avatar2",
-      twitter: "twitter.com/explorer_alex",
-      github: "github.com/explorer_alex",
-      portfolio: [
-        { title: "Analysis of EHD Thrust Anomaly", url: "https://labvex.org/docs/ehd_analysis.pdf" }
-      ],
-      customCategories: ["Propulsion", "Quantum", "Data Analysis"],
-      customTags: ["ehd", "thrust", "citizen-science"],
-    });
+  const onboardCitizen = async (selectedInterests: string[]) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "CITIZEN_EXPLORER",
+          interests: selectedInterests,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Onboarding citizen error", e);
+    }
   };
 
-  const onboardScientist = (providedOrcid: string) => {
-    setOrcid(providedOrcid);
-    setIsZKVerified(true);
-    // 10% chance of being a Nobel Laureate mock
-    const isNobel = Math.random() > 0.9;
-    setRole(isNobel ? "NOBEL_LAUREATE" : "VERIFIED_PHYSICIST");
-    setProfileData({
-      name: "Dr. V. K.",
-      bio: "Specializing in high-voltage electrodynamics and asymmetric capacitor arrays. Looking for anomalies in standard gravity models.",
-      avatar: "avatar3",
-      twitter: "twitter.com/dr_vk_physics",
-      github: "github.com/dr-vk",
-      portfolio: [
-        { title: "Observation of Anomalous Thrust in Asymmetric Capacitors", url: "https://labvex.org/docs/anomalous_thrust.pdf" },
-        { title: "Biefeld-Brown Effect under Extreme Vacuum Conditions", url: "https://labvex.org/docs/extreme_vacuum.pdf" }
-      ],
-      customCategories: ["Propulsion", "Quantum", "Vacuum Tech"],
-      customTags: ["ehd", "asymmetric-capacitors", "biefeld-brown"],
-    });
+  const onboardScientist = async (providedOrcid: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "VERIFIED_PHYSICIST",
+          orcid: providedOrcid,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Onboarding scientist error", e);
+    }
   };
 
-  const onboardDeveloper = (github: string) => {
-    setRole("DEVELOPER");
-    setProfileData({
-      name: "Dev Stark",
-      bio: "AI Agent Coordinator & Smart Contract wizard. Building open-source SDKs for Sovereign Science.",
-      avatar: "avatar4",
-      twitter: "twitter.com/devstark",
-      github: `github.com/${github}`,
-      portfolio: [
-        { title: "Vexy AI Auditor Node SDK", url: "https://github.com/labvex/vexy-auditor-sdk" }
-      ],
-      customCategories: ["Hardware", "Software", "AI Agents"],
-      customTags: ["smart-contracts", "solana", "ai-agents"],
-    });
+  const onboardDeveloper = async (githubUsername: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "DEVELOPER",
+          github: githubUsername,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Onboarding developer error", e);
+    }
   };
 
-  const onboardLaboratory = (facilityName: string) => {
-    setRole("LABORATORY");
-    setIsZKVerified(true);
-    setProfileData({
-      name: facilityName,
-      bio: "Providing state-of-the-art laboratory capacities and vacuum chambers for frontier physics replication.",
-      avatar: "avatar5",
-      twitter: "twitter.com/munich_quantum",
-      github: "github.com/munich-quantum",
-      portfolio: [
-        { title: "Calibration Logs: 10^-7 Torr Vacuum chambers", url: "https://labvex.org/labs/munich_calib.pdf" }
-      ],
-      customCategories: ["Vacuum Tech", "Quantum", "Hardware"],
-      customTags: ["vacuum-chamber", "calibration", "telemetry"],
-    });
+  const onboardLaboratory = async (facilityName: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "LABORATORY",
+          displayName: facilityName,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Onboarding laboratory error", e);
+    }
   };
 
-  const onboardCompany = (companyName: string) => {
-    setRole("COMPANY");
-    setProfileData({
-      name: companyName,
-      bio: "Corporate sponsor investing in intellectual property tokens and commercial R&D gravity-control mechanisms.",
-      avatar: "avatar6",
-      twitter: "twitter.com/aether_corp",
-      github: "github.com/aether-rnd",
-      portfolio: [
-        { title: "2026 Sovereign Science R&D Grants Portfolio", url: "https://labvex.org/grants/portfolio2026.pdf" }
-      ],
-      customCategories: ["Investments", "Propulsion", "IP Tokens"],
-      customTags: ["grants", "funding", "ip-tokens"],
-    });
+  const onboardCompany = async (companyName: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "COMPANY",
+          displayName: companyName,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        window.location.reload();
+      }
+    } catch (e) {
+      console.error("Onboarding company error", e);
+    }
   };
 
-  const gainReputation = (amount: number) => {
+  const gainReputation = async (amount: number) => {
+    // If authenticated, we could trigger a reputation post request
     setReputation(prev => prev + amount);
+    // Real implementation updates via DB events but on the client we update state as well
   };
 
   const updateProfileData = (data: Partial<UserProfileData>) => {
@@ -270,35 +309,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     if (connected) disconnect();
-    setIsGoogleLoggedIn(false);
-    setIsZKVerified(false);
-    setIsAdmin(false);
-    setInterests([]);
-    setOrcid(null);
-    setRole("GUEST");
-    setReputation(1200);
-    setProfileData({
-      name: "Guest User",
-      bio: "",
-      avatar: "avatar1",
-      twitter: "",
-      github: "",
-      portfolio: [],
-      customCategories: [],
-      customTags: [],
-    });
-    localStorage.removeItem("labvex_role");
-    localStorage.removeItem("labvex_reputation");
-    localStorage.removeItem("labvex_profile");
-    localStorage.removeItem("labvex_orcid");
-    localStorage.removeItem("labvex_interests");
-    localStorage.removeItem("labvex_zk");
-    localStorage.removeItem("labvex_admin");
-    localStorage.removeItem("labvex_google");
+    signOut({ redirect: false });
   };
 
   const toggleAdmin = () => {
-    setIsAdmin(!isAdmin);
+    setIsAdmin(prev => !prev);
   };
 
   const openAuthModal = () => {
@@ -309,7 +324,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsAuthModalOpen(false);
   };
 
-  const isAuthenticated = role !== "GUEST"; // Authenticated fully ONLY after choosing a path
+  const isAuthenticated = status === "authenticated" && role !== "GUEST";
 
   return (
     <AuthContext.Provider value={{ 
@@ -331,7 +346,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       toggleAdmin, 
       logout,
       isAuthenticated,
-      isWalletConnected: connected || isGoogleLoggedIn,
+      isWalletConnected: connected || status === "authenticated",
       isAuthModalOpen,
       openAuthModal,
       closeAuthModal,
@@ -341,6 +356,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
-
 
 export const useAuth = () => useContext(AuthContext);

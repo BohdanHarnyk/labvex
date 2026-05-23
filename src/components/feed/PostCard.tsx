@@ -1,8 +1,8 @@
 "use client";
 
 import { useAuth } from "@/lib/auth/AuthContext";
-import { CheckCircle2, ShieldAlert, Sparkles, MessageSquare, Trash2, Lock, Coins } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, ShieldAlert, Sparkles, MessageSquare, Trash2, Lock, Coins, AlertOctagon } from "lucide-react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface CommentProps {
@@ -49,13 +49,19 @@ const Comment = ({ author, role, text, timestamp, upvotes }: CommentProps) => {
 };
 
 export function PostCard({ 
+  id,
   title, 
   content, 
   author, 
   authorRole = "VERIFIED_PHYSICIST", 
+  authorReputation = 1200,
   txHash, 
   category, 
   tags = [], 
+  upvotes = 0,
+  casFlag = false,
+  aiSummary = null,
+  createdAt,
   onTagClick, 
   onCategoryClick, 
   onDelete, 
@@ -65,18 +71,107 @@ export function PostCard({
   const [isSummarizing, setIsSummarizing] = useState(false);
   const { isAdmin, isAuthenticated, openAuthModal } = useAuth();
 
+  const [votesCount, setVotesCount] = useState(upvotes);
+  const [hasVoted, setHasVoted] = useState(false);
+  const [aiSummaryState, setAiSummaryState] = useState<string | null>(aiSummary);
+
   const [tipModalOpen, setTipModalOpen] = useState(false);
   const [tipCurrency, setTipCurrency] = useState<"SOL" | "LVEX">("LVEX");
   const [tipAmount, setTipAmount] = useState("20");
   const [tipTxState, setTipTxState] = useState<"IDLE" | "SIGNING" | "SUCCESS">("IDLE");
 
-  const handleSummarize = () => {
+  // Keep upvotes count in sync with props
+  useEffect(() => {
+    setVotesCount(upvotes);
+  }, [upvotes]);
+
+  const handleVote = async () => {
     if (!isAuthenticated) {
       openAuthModal();
       return;
     }
+    try {
+      const res = await fetch(`/api/posts/${id}/vote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voteType: "up" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setVotesCount(data.upvotes);
+        setHasVoted(!hasVoted);
+      }
+    } catch (e) {
+      console.error("Failed to vote:", e);
+    }
+  };
+
+  const handleSummarize = async () => {
+    if (!isAuthenticated) {
+      openAuthModal();
+      return;
+    }
+    
+    // Toggle off if already summarized
+    if (aiSummaryState && isSummarizing) {
+      setIsSummarizing(false);
+      return;
+    }
+
+    if (aiSummaryState) {
+      setIsSummarizing(true);
+      return;
+    }
+
     setIsSummarizing(true);
-    setTimeout(() => setIsSummarizing(false), 500);
+    setAiSummaryState("");
+
+    try {
+      const res = await fetch("/api/vexy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: `Summarize the following scientific publication briefly. Title: "${title}". Content: "${content}".`,
+            },
+          ],
+          context: { type: "post", id },
+        }),
+      });
+
+      if (!res.ok) throw new Error("AI request failed");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let resultText = "";
+
+      while (reader) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n");
+        
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const dataStr = line.slice(6).trim();
+            if (dataStr === "[DONE]") break;
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.text) {
+                resultText += parsed.text;
+                setAiSummaryState(resultText);
+              }
+            } catch (e) {}
+          }
+        }
+      }
+    } catch (e) {
+      console.error("AI summarization failed:", e);
+      setAiSummaryState("Не вдалося завантажити AI-резюме. Спробуйте пізніше.");
+    }
   };
 
   const handleInteract = () => {
@@ -120,11 +215,16 @@ export function PostCard({
       case "CITIZEN_EXPLORER":
         return { bg: "bg-blue-100 text-blue-700 border-blue-200", text: "Explorer", colorClass: "bg-blue-50 text-blue-600" };
       default:
-        return { bg: "bg-gray-100 text-gray-600 border-gray-200", text: "Guest", colorClass: "bg-gray-50 text-gray-500" };
+        return { bg: "bg-gray-100 text-gray-600 border-gray-200", text: "Researcher", colorClass: "bg-gray-50 text-gray-500" };
     }
   };
 
   const badge = getBadgeColorsAndText(authorRole);
+
+  // Format date display
+  const dateDisplay = createdAt 
+    ? new Date(createdAt).toLocaleDateString("uk-UA", { hour: "2-digit", minute: "2-digit" })
+    : "щойно";
 
   return (
     <div className="card-soft p-6 mb-6 relative overflow-hidden">
@@ -139,9 +239,12 @@ export function PostCard({
               <span className={`text-[10px] ${badge.bg} px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold uppercase tracking-wide border`}>
                 <CheckCircle2 className="w-3 h-3" /> {badge.text}
               </span>
+              <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.2 rounded">
+                {authorReputation.toLocaleString()} rep
+              </span>
             </div>
             <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2 mt-0.5">
-              <span>2 hours ago</span>
+              <span>{dateDisplay}</span>
               <span>•</span>
               {category && (
                 <>
@@ -154,9 +257,11 @@ export function PostCard({
                   <span>•</span>
                 </>
               )}
-              <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono text-[10px]" title="Solana Transaction Hash">
-                Prior Art: {txHash}
-              </span>
+              {txHash && (
+                <span className="bg-gray-100 px-2 py-0.5 rounded text-gray-600 font-mono text-[10px]" title="Solana Transaction Hash">
+                  Prior Art: {txHash}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -189,6 +294,19 @@ export function PostCard({
           </div>
         )}
       </div>
+
+      {/* CAS Screening Warning Badge (Symbiosis Feature) */}
+      {casFlag && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-4 mb-6 flex items-start gap-3">
+          <AlertOctagon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div>
+            <h4 className="font-bold text-sm text-amber-900">Compliance Filter: CAS Screening Active</h4>
+            <p className="text-xs text-amber-700 leading-relaxed mt-0.5">
+              Ця публікація посилається на незареєстровані або потенційно небезпечні хімічні сполуки чи біологічні матеріали. Дані не верифіковані WHO/FDA. Будьте обережні.
+            </p>
+          </div>
+        </div>
+      )}
       
       {tags && tags.length > 0 && (
         <div className="flex flex-wrap gap-1.5 mb-6">
@@ -206,6 +324,16 @@ export function PostCard({
       
       <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-100">
         <button 
+          onClick={handleVote}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            hasVoted 
+              ? "bg-green-600 text-white hover:bg-green-700" 
+              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+          }`}
+        >
+          <span>▲</span> Upvote ({votesCount})
+        </button>
+        <button 
           onClick={handleInteract}
           className="btn-secondary px-4 py-2 text-xs flex items-center gap-2"
         >
@@ -213,21 +341,45 @@ export function PostCard({
           Discuss (3)
         </button>
         <button 
-          onClick={isAuthenticated ? handleSummarize : handleInteract}
-          className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+          onClick={handleSummarize}
+          className="bg-blue-50 text-blue-600 hover:bg-blue-100 px-4 py-2 rounded-lg text-xs font-medium transition-colors flex items-center gap-2 cursor-pointer"
         >
-          <Sparkles className="w-4 h-4" />
-          Summarize with AI
-          {isSummarizing && <span className="animate-pulse">...</span>}
+          <Sparkles className="w-4 h-4 text-blue-500" />
+          {aiSummaryState ? (isSummarizing ? "Hide AI Summary" : "AI Summary") : "Summarize with AI"}
         </button>
         <button 
           onClick={handleTipClick}
-          className="bg-green-50 text-green-700 hover:bg-green-100 px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 border border-green-200/50"
+          className="bg-green-50 text-green-700 hover:bg-green-100 px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-2 border border-green-200/50 cursor-pointer"
         >
           <Coins className="w-4 h-4 text-green-600" />
           Tip Author
         </button>
       </div>
+
+      {/* Vexy AI Summary Expandable Box (Symbiosis Feature) */}
+      <AnimatePresence>
+        {isSummarizing && aiSummaryState !== null && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-4 p-4 bg-blue-50/50 border border-blue-100/50 rounded-xl relative">
+              <div className="absolute top-4 right-4 w-4 h-4 flex items-center justify-center">
+                <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping" />
+              </div>
+              <div className="flex items-center gap-2 mb-2 text-blue-700 font-semibold text-xs uppercase tracking-wide">
+                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                VEXY AI Summary
+              </div>
+              <p className="text-sm text-blue-900 leading-relaxed font-medium">
+                {aiSummaryState || "Аналіз публікації... Стрімінг результатів від VEXY AI..."}
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Tipping Modal */}
       <AnimatePresence>
@@ -351,27 +503,6 @@ export function PostCard({
                 </div>
               )}
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {isSummarizing && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
-              <div className="flex items-center gap-2 mb-2 text-blue-700 font-semibold text-xs uppercase tracking-wide">
-                <Sparkles className="w-3 h-3" />
-                AI Analysis
-              </div>
-              <p className="text-sm text-blue-900 leading-relaxed">
-                Author observed asymmetric thrust in high vacuum, ruling out simple ion wind as the sole cause. Implications: potential novel propulsion mechanism or unidentified systematic error. Confidence level: 78%.
-              </p>
-            </div>
           </motion.div>
         )}
       </AnimatePresence>
