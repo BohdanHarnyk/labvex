@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 
 export function LandingHeader() {
   const [scrolled, setScrolled] = useState(false);
-  const { isAuthenticated, openAuthModal } = useAuth();
+  const { isAuthenticated, openAuthModal, setUserRequestedLanding } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -23,6 +23,7 @@ export function LandingHeader() {
   const handleLaunchApp = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isAuthenticated) {
+      setUserRequestedLanding(false);
       router.push("/app");
     } else {
       openAuthModal();

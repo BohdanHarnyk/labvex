@@ -20,7 +20,7 @@ const AbstractBackground = () => (
 );
 
 export default function LandingPage() {
-  const { isAuthenticated, openAuthModal } = useAuth();
+  const { isAuthenticated, openAuthModal, setUserRequestedLanding } = useAuth();
   const router = useRouter();
 
 
@@ -28,6 +28,7 @@ export default function LandingPage() {
   const handleLaunchApp = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isAuthenticated) {
+      setUserRequestedLanding(false);
       router.push("/app");
     } else {
       openAuthModal();

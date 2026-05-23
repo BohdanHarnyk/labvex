@@ -52,6 +52,7 @@ interface AuthContextType {
   openAuthModal: () => void;
   closeAuthModal: () => void;
   isInitializing: boolean;
+  setUserRequestedLanding: (val: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -87,6 +88,7 @@ const AuthContext = createContext<AuthContextType>({
   openAuthModal: () => {},
   closeAuthModal: () => {},
   isInitializing: true,
+  setUserRequestedLanding: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -113,6 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
   
   const [isInitializing, setIsInitializing] = useState(true);
+  const [userRequestedLanding, setUserRequestedLanding] = useState(false);
 
   // Solana Wallet Login Hook: auto triggers signature when connected but not signed in
   useEffect(() => {
@@ -126,16 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const signatureBytes = await signMessage(messageBytes);
           const signature = bs58.encode(signatureBytes);
 
-          const result = await signIn("solana", {
+          await signIn("solana", {
             message,
             signature,
             publicKey: publicKey.toBase58(),
             redirect: false,
           });
-
-          if (result && !result.error) {
-            router.push("/app");
-          }
         } catch (e) {
           console.error("Solana credentials sign-in rejected or failed", e);
           disconnect();
@@ -143,7 +142,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     handleSolanaLogin();
-  }, [publicKey, signMessage, status, disconnect, router]);
+  }, [publicKey, signMessage, status, disconnect]);
 
   // Sync state with NextAuth Session
   useEffect(() => {
@@ -178,9 +177,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }));
 
       // Auto-open Onboarding Modal for completely new GUEST users
-      // @ts-ignore
-      if (!session.user.isOnboarded && dbRole === "GUEST") {
+      if (dbRole === "GUEST") {
         setIsAuthModalOpen(true);
+      } else {
+        // If they are onboarded, check if they are on "/" and haven't explicitly requested to view the landing page
+        if (window.location.pathname === "/" && !userRequestedLanding) {
+          setIsAuthModalOpen(false); // Make sure modal is closed
+          router.push("/app");
+        }
       }
     } else {
       // Unauthenticated state resets
@@ -199,13 +203,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         customCategories: [],
         customTags: [],
       });
+      setUserRequestedLanding(false);
     }
 
     setIsInitializing(false);
-  }, [session, status]);
+  }, [session, status, userRequestedLanding, router]);
 
   const loginWithGoogle = () => {
-    signIn("google", { callbackUrl: "/app" });
+    signIn("google", { callbackUrl: "/" });
   };
 
   const onboardCitizen = async (selectedInterests: string[]) => {
@@ -220,7 +225,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         await updateSession();
-        window.location.reload();
+        setIsAuthModalOpen(false);
+        router.push("/app");
       }
     } catch (e) {
       console.error("Onboarding citizen error", e);
@@ -239,7 +245,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         await updateSession();
-        window.location.reload();
+        setIsAuthModalOpen(false);
+        router.push("/app");
       }
     } catch (e) {
       console.error("Onboarding scientist error", e);
@@ -258,7 +265,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         await updateSession();
-        window.location.reload();
+        setIsAuthModalOpen(false);
+        router.push("/app");
       }
     } catch (e) {
       console.error("Onboarding developer error", e);
@@ -277,7 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         await updateSession();
-        window.location.reload();
+        setIsAuthModalOpen(false);
+        router.push("/app");
       }
     } catch (e) {
       console.error("Onboarding laboratory error", e);
@@ -296,7 +305,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         await updateSession();
-        window.location.reload();
+        setIsAuthModalOpen(false);
+        router.push("/app");
       }
     } catch (e) {
       console.error("Onboarding company error", e);
@@ -304,9 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const gainReputation = async (amount: number) => {
-    // If authenticated, we could trigger a reputation post request
     setReputation(prev => prev + amount);
-    // Real implementation updates via DB events but on the client we update state as well
   };
 
   const updateProfileData = (data: Partial<UserProfileData>) => {
@@ -356,7 +364,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthModalOpen,
       openAuthModal,
       closeAuthModal,
-      isInitializing
+      isInitializing,
+      setUserRequestedLanding
     }}>
       {children}
     </AuthContext.Provider>

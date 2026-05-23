@@ -10,7 +10,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
  
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isInitializing, isAdmin, toggleAdmin, openAuthModal } = useAuth();
+  const { isAuthenticated, isInitializing, isAdmin, toggleAdmin, openAuthModal, setUserRequestedLanding } = useAuth();
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
 
@@ -82,12 +82,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       {/* App Header */}
       <header className="flex-none h-16 bg-white border-b border-gray-200 px-6 flex justify-between items-center z-20">
         <div className="flex items-center gap-4">
-          <Link 
-            href="/" 
-            className="text-xs font-bold text-gray-500 hover:text-green-500 border border-gray-200 px-3 py-1.5 rounded-xl hover:bg-gray-50 hover:border-green-500/30 transition-all flex items-center gap-1.5 bg-white shadow-sm"
+          <button 
+            onClick={() => {
+              setUserRequestedLanding(true);
+              router.push("/");
+            }}
+            className="text-xs font-bold text-gray-500 hover:text-green-500 border border-gray-200 px-3 py-1.5 rounded-xl hover:bg-gray-50 hover:border-green-500/30 transition-all flex items-center gap-1.5 bg-white shadow-sm cursor-pointer"
           >
             ← Landing Page
-          </Link>
+          </button>
           <div className="h-6 w-px bg-gray-200" />
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center text-white shadow-sm">
