@@ -19,38 +19,7 @@ type Thread = {
   tags?: string[];
 };
  
-const initialThreads: Thread[] = [
-  {
-    id: "1",
-    category: "Propulsion",
-    title: "Review of the 2025 EM Drive Vacuum tests by NASA Eagleworks",
-    author: "Dr. V. K.",
-    role: "Verified Physicist",
-    replies: 142,
-    upvotes: 890,
-    tags: ["emdrive", "vacuum", "nasa"],
-  },
-  {
-    id: "2",
-    category: "Quantum",
-    title: "Is the Podkletnov effect just thermal expansion of the YBCO?",
-    author: "Alex_Sci",
-    role: "Citizen Explorer",
-    replies: 56,
-    upvotes: 120,
-    tags: ["quantum", "superconductivity", "gravity"],
-  },
-  {
-    id: "3",
-    category: "Hardware",
-    title: "DIY Guide: Building a high-voltage asymmetric capacitor at home safely",
-    author: "VoltMaster",
-    role: "Citizen Explorer",
-    replies: 89,
-    upvotes: 450,
-    tags: ["diy", "asymmetric-capacitor", "safety"],
-  }
-];
+const initialThreads: Thread[] = [];
  
 export default function ForumPage() {
   const { role, profileData, isAuthenticated, isAdmin, updateProfileData } = useAuth();

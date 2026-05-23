@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useSession, signIn, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import bs58 from "bs58";
 
 export type UserRole = 
@@ -91,6 +92,7 @@ const AuthContext = createContext<AuthContextType>({
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { connected, publicKey, signMessage, disconnect } = useWallet();
   const { data: session, status, update: updateSession } = useSession();
+  const router = useRouter();
 
   const [role, setRole] = useState<UserRole>("GUEST");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -124,12 +126,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const signatureBytes = await signMessage(messageBytes);
           const signature = bs58.encode(signatureBytes);
 
-          await signIn("solana", {
+          const result = await signIn("solana", {
             message,
             signature,
             publicKey: publicKey.toBase58(),
             redirect: false,
           });
+
+          if (result && !result.error) {
+            router.push("/app");
+          }
         } catch (e) {
           console.error("Solana credentials sign-in rejected or failed", e);
           disconnect();
@@ -137,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
     handleSolanaLogin();
-  }, [publicKey, signMessage, status, disconnect]);
+  }, [publicKey, signMessage, status, disconnect, router]);
 
   // Sync state with NextAuth Session
   useEffect(() => {
@@ -199,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [session, status]);
 
   const loginWithGoogle = () => {
-    signIn("google");
+    signIn("google", { callbackUrl: "/app" });
   };
 
   const onboardCitizen = async (selectedInterests: string[]) => {
