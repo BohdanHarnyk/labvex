@@ -5,7 +5,7 @@ import { useWalletModal } from "@solana/wallet-adapter-react-ui";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Terminal, TestTube2, UserCircle2, ArrowRight, ShieldCheck, Code, Building2, Briefcase, ChevronRight } from "lucide-react";
+import { Terminal, TestTube2, UserCircle2, ArrowRight, ShieldCheck, Code, Building2, Briefcase, ChevronRight, Scale, ClipboardCheck, Cpu } from "lucide-react";
 
 export function AuthModal() {
   const { connected } = useWallet();
@@ -21,6 +21,9 @@ export function AuthModal() {
     onboardDeveloper,
     onboardLaboratory,
     onboardCompany,
+    onboardLegalAgent,
+    onboardIndependentAuditor,
+    onboardHardwareOracle,
     isAuthModalOpen
   } = useAuth();
   
@@ -31,6 +34,9 @@ export function AuthModal() {
     "DEVELOPER_FORM" | 
     "LABORATORY_FORM" | 
     "COMPANY_FORM" | 
+    "LEGAL_AGENT_FORM" |
+    "INDEPENDENT_AUDITOR_FORM" |
+    "HARDWARE_ORACLE_FORM" |
     "TERMINAL"
   >("SELECT_PATH");
   
@@ -42,6 +48,14 @@ export function AuthModal() {
   const [fundingFocus, setFundingFocus] = useState("");
   const [orcidVal, setOrcidVal] = useState("0000-0002-1825-0097");
 
+  // New Roles fields
+  const [legalFirm, setLegalFirm] = useState("");
+  const [licenseNum, setLicenseNum] = useState("");
+  const [auditorDegrees, setAuditorDegrees] = useState("");
+  const [auditorSpecialty, setAuditorSpecialty] = useState("");
+  const [vendorName, setVendorName] = useState("");
+  const [oracleDeviceType, setOracleDeviceType] = useState("");
+
   const [logs, setLogs] = useState<string[]>([]);
 
   useEffect(() => {
@@ -51,7 +65,7 @@ export function AuthModal() {
   }, [isWalletConnected, isAuthenticated]);
 
   const runTerminalSimulation = (
-    path: "CITIZEN" | "SCIENTIST" | "DEVELOPER" | "LABORATORY" | "COMPANY",
+    path: "CITIZEN" | "SCIENTIST" | "DEVELOPER" | "LABORATORY" | "COMPANY" | "LEGAL_AGENT" | "INDEPENDENT_AUDITOR" | "HARDWARE_ORACLE",
     data: any
   ) => {
     setOnboardStep("TERMINAL");
@@ -97,6 +111,36 @@ export function AuthModal() {
         setLogs(l => [...l, "> Access granted. Multi-sig workspace deployed."]);
         setTimeout(() => {
           onboardCompany(data.companyName);
+          closeAuthModal();
+        }, 150);
+      }, 600);
+    } else if (path === "LEGAL_AGENT") {
+      setTimeout(() => setLogs(l => [...l, `> Querying patent firm credentials: ${data.firmName}...`]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Verifying practice status with IP Bar..."]), 450);
+      setTimeout(() => {
+        setLogs(l => [...l, "> Access granted. DeSci Legal Agent workspace ready."]);
+        setTimeout(() => {
+          onboardLegalAgent(data.firmName, data.licenseNumber);
+          closeAuthModal();
+        }, 150);
+      }, 600);
+    } else if (path === "INDEPENDENT_AUDITOR") {
+      setTimeout(() => setLogs(l => [...l, `> Querying academic registry for auditor credentials...`]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Initializing cryptographically secure review workspace..."]), 450);
+      setTimeout(() => {
+        setLogs(l => [...l, "> Access granted. Auditor credentials verified."]);
+        setTimeout(() => {
+          onboardIndependentAuditor(data.credentials, data.specialty);
+          closeAuthModal();
+        }, 150);
+      }, 600);
+    } else if (path === "HARDWARE_ORACLE") {
+      setTimeout(() => setLogs(l => [...l, `> Initializing hardware handshake with ${data.vendorName} oracle...`]), 300);
+      setTimeout(() => setLogs(l => [...l, "> Establishing telemetry proof protocol (PoT)..."]), 450);
+      setTimeout(() => {
+        setLogs(l => [...l, "> Access granted. Hardware Oracle active and syncing."]);
+        setTimeout(() => {
+          onboardHardwareOracle(data.vendorName, data.deviceType);
           closeAuthModal();
         }, 150);
       }, 600);
@@ -231,6 +275,51 @@ export function AuthModal() {
                       <p className="text-xs text-gray-500 truncate">Fund research, purchase IP tokens, and license technologies.</p>
                     </div>
                     <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-amber-500 transition-colors" />
+                  </button>
+
+                  {/* DeSci Legal Agent */}
+                  <button 
+                    onClick={() => setOnboardStep("LEGAL_AGENT_FORM")}
+                    className="w-full flex items-center gap-4 p-4 border border-gray-100 bg-gray-50 rounded-xl hover:border-rose-500 hover:bg-rose-50/50 transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <Scale className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-900 text-sm">DeSci Legal / IP Agent</h3>
+                      <p className="text-xs text-gray-500 truncate">Verify legal compliance, draft IPT terms, audit IP transfers.</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-rose-500 transition-colors" />
+                  </button>
+
+                  {/* Independent Auditor */}
+                  <button 
+                    onClick={() => setOnboardStep("INDEPENDENT_AUDITOR_FORM")}
+                    className="w-full flex items-center gap-4 p-4 border border-gray-100 bg-gray-50 rounded-xl hover:border-cyan-500 hover:bg-cyan-50/50 transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <ClipboardCheck className="w-5 h-5 text-cyan-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-900 text-sm">Independent Auditor</h3>
+                      <p className="text-xs text-gray-500 truncate">Audit raw telemetry, verify experiments, publish audits.</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-cyan-500 transition-colors" />
+                  </button>
+
+                  {/* Hardware Oracle */}
+                  <button 
+                    onClick={() => setOnboardStep("HARDWARE_ORACLE_FORM")}
+                    className="w-full flex items-center gap-4 p-4 border border-gray-100 bg-gray-50 rounded-xl hover:border-orange-500 hover:bg-orange-50/50 transition-all text-left group"
+                  >
+                    <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
+                      <Cpu className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-900 text-sm">Hardware Oracle</h3>
+                      <p className="text-xs text-gray-500 truncate">Certify cleanroom sensor setups and connect physical instrumentation.</p>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-gray-400 group-hover:text-orange-500 transition-colors" />
                   </button>
 
                   {/* Enthusiast */}
@@ -427,6 +516,129 @@ export function AuthModal() {
                   className="w-full btn-primary py-3 flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white"
                 >
                   Deploy Corporate Node <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* STEP 2F: LEGAL AGENT FORM */}
+            {isWalletConnected && onboardStep === "LEGAL_AGENT_FORM" && (
+              <div className="animate-in fade-in slide-in-from-right-8 duration-500">
+                <button onClick={() => setOnboardStep("SELECT_PATH")} className="text-xs text-gray-500 hover:text-gray-900 mb-4 flex items-center gap-1">
+                  ← Back
+                </button>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Legal Agent Onboarding</h2>
+                <p className="text-sm text-gray-500 mb-6">Register your legal entity to verify IP transactions and draft IPT token conditions.</p>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Law Firm / Professional Title</label>
+                    <input 
+                      type="text" 
+                      value={legalFirm}
+                      onChange={(e) => setLegalFirm(e.target.value)}
+                      placeholder="e.g. DeSci Patent Counsel LLP" 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 text-gray-955 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">IP Practice / License Number</label>
+                    <input 
+                      type="text" 
+                      value={licenseNum}
+                      onChange={(e) => setLicenseNum(e.target.value)}
+                      placeholder="e.g. USPTO-Reg-99882" 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 text-gray-955 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => runTerminalSimulation("LEGAL_AGENT", { firmName: legalFirm || "DeSci Patent Counsel LLP", licenseNumber: licenseNum || "USPTO-Reg-99882" })}
+                  className="w-full btn-primary py-3 flex items-center justify-center gap-2 bg-rose-600 hover:bg-rose-700 text-white"
+                >
+                  Verify Bar Status <ShieldCheck className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* STEP 2G: INDEPENDENT AUDITOR FORM */}
+            {isWalletConnected && onboardStep === "INDEPENDENT_AUDITOR_FORM" && (
+              <div className="animate-in fade-in slide-in-from-right-8 duration-500">
+                <button onClick={() => setOnboardStep("SELECT_PATH")} className="text-xs text-gray-500 hover:text-gray-900 mb-4 flex items-center gap-1">
+                  ← Back
+                </button>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Auditor Credentials</h2>
+                <p className="text-sm text-gray-500 mb-6">Register to audit telemetry streams, review code, and verify scientific claims.</p>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Academic Degree / Professional Credentials</label>
+                    <input 
+                      type="text" 
+                      value={auditorDegrees}
+                      onChange={(e) => setAuditorDegrees(e.target.value)}
+                      placeholder="e.g. PhD in Experimental Physics, IEEE Senior Member" 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 text-gray-955 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Primary Review Specialty</label>
+                    <input 
+                      type="text" 
+                      value={auditorSpecialty}
+                      onChange={(e) => setAuditorSpecialty(e.target.value)}
+                      placeholder="e.g. Cryogenics telemetry, Rust Smart Contracts" 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 text-gray-955 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => runTerminalSimulation("INDEPENDENT_AUDITOR", { credentials: auditorDegrees || "PhD in Experimental Physics", specialty: auditorSpecialty || "Cryogenics telemetry" })}
+                  className="w-full btn-primary py-3 flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white"
+                >
+                  Verify Auditor Credentials <ShieldCheck className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* STEP 2H: HARDWARE ORACLE FORM */}
+            {isWalletConnected && onboardStep === "HARDWARE_ORACLE_FORM" && (
+              <div className="animate-in fade-in slide-in-from-right-8 duration-500">
+                <button onClick={() => setOnboardStep("SELECT_PATH")} className="text-xs text-gray-500 hover:text-gray-900 mb-4 flex items-center gap-1">
+                  ← Back
+                </button>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Hardware Oracle Registration</h2>
+                <p className="text-sm text-gray-500 mb-6">Register a hardware vendor node to cryptographically sign physical lab readings.</p>
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hardware Vendor Name</label>
+                    <input 
+                      type="text" 
+                      value={vendorName}
+                      onChange={(e) => setVendorName(e.target.value)}
+                      placeholder="e.g. Keithley Instruments / Tektronix Node" 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 text-gray-955 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Hardware Interface / Protocol</label>
+                    <input 
+                      type="text" 
+                      value={oracleDeviceType}
+                      onChange={(e) => setOracleDeviceType(e.target.value)}
+                      placeholder="e.g. GPIB-to-Solana IoT Bridge v2" 
+                      className="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-50 text-gray-955 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => runTerminalSimulation("HARDWARE_ORACLE", { vendorName: vendorName || "Keithley Instruments Node", deviceType: oracleDeviceType || "GPIB-to-Solana IoT Bridge" })}
+                  className="w-full btn-primary py-3 flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  Bind Hardware Node <ShieldCheck className="w-4 h-4" />
                 </button>
               </div>
             )}

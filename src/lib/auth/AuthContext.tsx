@@ -15,6 +15,9 @@ export type UserRole =
   | "DEVELOPER" 
   | "LABORATORY" 
   | "COMPANY"
+  | "LEGAL_AGENT"
+  | "INDEPENDENT_AUDITOR"
+  | "HARDWARE_ORACLE"
   | "ADMIN";
 
 export interface UserProfileData {
@@ -42,6 +45,10 @@ interface AuthContextType {
   onboardDeveloper: (github: string) => Promise<void>;
   onboardLaboratory: (facilityName: string) => Promise<void>;
   onboardCompany: (companyName: string) => Promise<void>;
+  onboardLegalAgent: (firmName: string, licenseNumber: string) => Promise<void>;
+  onboardIndependentAuditor: (credentials: string, specialty: string) => Promise<void>;
+  onboardHardwareOracle: (vendorName: string, deviceType: string) => Promise<void>;
+  upgradeUserRole: (newRole: UserRole, data: any) => Promise<boolean>;
   gainReputation: (amount: number) => Promise<void>;
   updateProfileData: (data: Partial<UserProfileData>) => void;
   toggleAdmin: () => void;
@@ -78,6 +85,10 @@ const AuthContext = createContext<AuthContextType>({
   onboardDeveloper: async () => {},
   onboardLaboratory: async () => {},
   onboardCompany: async () => {},
+  onboardLegalAgent: async () => {},
+  onboardIndependentAuditor: async () => {},
+  onboardHardwareOracle: async () => {},
+  upgradeUserRole: async () => false,
   gainReputation: async () => {},
   updateProfileData: () => {},
   toggleAdmin: () => {},
@@ -156,7 +167,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setReputation(session.user.reputationScore ?? 1200);
       setIsAdmin(dbRole === "ADMIN");
       // @ts-ignore
-      setIsZKVerified(dbRole === "VERIFIED_PHYSICIST" || dbRole === "NOBEL_LAUREATE" || dbRole === "LABORATORY");
+      setIsZKVerified(
+        dbRole === "VERIFIED_PHYSICIST" || 
+        dbRole === "NOBEL_LAUREATE" || 
+        dbRole === "LABORATORY" ||
+        dbRole === "INDEPENDENT_AUDITOR" ||
+        dbRole === "LEGAL_AGENT" ||
+        dbRole === "HARDWARE_ORACLE"
+      );
       
       // Parse bio if ORCID is embedded
       // @ts-ignore
@@ -313,6 +331,93 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const onboardLegalAgent = async (firmName: string, licenseNumber: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "LEGAL_AGENT",
+          displayName: firmName,
+          bio: `License Number: ${licenseNumber}`,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        setIsAuthModalOpen(false);
+        router.push("/app");
+      }
+    } catch (e) {
+      console.error("Onboarding legal agent error", e);
+    }
+  };
+
+  const onboardIndependentAuditor = async (credentials: string, specialty: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "INDEPENDENT_AUDITOR",
+          displayName: credentials,
+          bio: `Specialty: ${specialty}`,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        setIsAuthModalOpen(false);
+        router.push("/app");
+      }
+    } catch (e) {
+      console.error("Onboarding independent auditor error", e);
+    }
+  };
+
+  const onboardHardwareOracle = async (vendorName: string, deviceType: string) => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: "HARDWARE_ORACLE",
+          displayName: vendorName,
+          bio: `Hardware Device: ${deviceType}`,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        setIsAuthModalOpen(false);
+        router.push("/app");
+      }
+    } catch (e) {
+      console.error("Onboarding hardware oracle error", e);
+    }
+  };
+
+  const upgradeUserRole = async (newRole: UserRole, data: any): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/user/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: newRole,
+          interests: data.interests,
+          displayName: data.displayName,
+          bio: data.bio,
+          orcid: data.orcid,
+        }),
+      });
+      if (res.ok) {
+        await updateSession();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.error("Upgrade role error", e);
+      return false;
+    }
+  };
+
   const gainReputation = async (amount: number) => {
     setReputation(prev => prev + amount);
   };
@@ -355,6 +460,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       onboardDeveloper,
       onboardLaboratory,
       onboardCompany,
+      onboardLegalAgent,
+      onboardIndependentAuditor,
+      onboardHardwareOracle,
+      upgradeUserRole,
       gainReputation,
       updateProfileData,
       toggleAdmin, 

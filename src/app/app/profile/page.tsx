@@ -4,7 +4,8 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { 
   User, ShieldCheck, Upload, Timer, Award, Activity, 
   ScanFace, CheckCircle2, LockKeyhole, Edit3, Save, X, 
-  Plus, Trash2, Globe, Sparkles, FolderPlus, Tag, Bookmark
+  Plus, Trash2, Globe, Sparkles, FolderPlus, Tag, Bookmark,
+  ArrowUpCircle, ShieldAlert, Scale, ClipboardCheck, Cpu
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -53,6 +54,14 @@ export default function ProfilePage() {
   const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
 
+  // Upgrade Role System States
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeRoleChoice, setUpgradeRoleChoice] = useState("");
+  const [upgradeInputText, setUpgradeInputText] = useState("");
+  const [upgradeInputText2, setUpgradeInputText2] = useState("");
+  const [upgradeState, setUpgradeState] = useState<"IDLE" | "SCANNING" | "SUCCESS" | "ERROR">("IDLE");
+  const [upgradeError, setUpgradeError] = useState("");
+
   // Reputation Decay 180 days countdown (in seconds)
   const [decaySeconds, setDecaySeconds] = useState(179 * 24 * 3600 + 23 * 3600 + 58 * 60 + 42);
  
@@ -98,11 +107,59 @@ export default function ProfilePage() {
     );
   }
  
+  const { upgradeUserRole } = useAuth();
+
   const isScientist = role === "VERIFIED_PHYSICIST" || role === "NOBEL_LAUREATE";
   const isLab = role === "LABORATORY";
   const isDev = role === "DEVELOPER";
   const isCompany = role === "COMPANY";
+  const isLegal = role === "LEGAL_AGENT";
+  const isAuditor = role === "INDEPENDENT_AUDITOR";
+  const isHardware = role === "HARDWARE_ORACLE";
   const roleTitle = role.replace("_", " ");
+
+  const handleUpgradeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!upgradeRoleChoice) return;
+    setUpgradeState("SCANNING");
+    setUpgradeError("");
+    
+    // Simulate ZK-proof generation & verification
+    setTimeout(async () => {
+      let finalBio = "";
+      let displayNameVal = profileData.name;
+      let orcidVal = undefined;
+      
+      if (upgradeRoleChoice === "VERIFIED_PHYSICIST") {
+        orcidVal = upgradeInputText || "0000-0002-1825-0097";
+        finalBio = `Verified Scientist. ORCID: ${orcidVal}`;
+      } else if (upgradeRoleChoice === "LEGAL_AGENT") {
+        displayNameVal = upgradeInputText || profileData.name;
+        finalBio = `DeSci Legal / IP Agent. License: ${upgradeInputText2 || "USPTO-Reg-99882"}`;
+      } else if (upgradeRoleChoice === "INDEPENDENT_AUDITOR") {
+        displayNameVal = upgradeInputText || profileData.name;
+        finalBio = `Independent Auditor. Credentials: ${upgradeInputText2 || "PhD, Senior IEEE"}`;
+      } else if (upgradeRoleChoice === "HARDWARE_ORACLE") {
+        displayNameVal = upgradeInputText || profileData.name;
+        finalBio = `Hardware Oracle Node. Device: ${upgradeInputText2 || "GPIB IoT Bridge"}`;
+      } else if (upgradeRoleChoice === "CITIZEN_EXPLORER") {
+        finalBio = `Citizen Explorer. Interests: Propulsion, Quantum`;
+      }
+      
+      const success = await upgradeUserRole(upgradeRoleChoice as any, {
+        displayName: displayNameVal,
+        bio: finalBio,
+        orcid: orcidVal
+      });
+      
+      if (success) {
+        setUpgradeState("SUCCESS");
+      } else {
+        setUpgradeState("ERROR");
+        setUpgradeError("Не вдалося оновити роль у базі даних.");
+      }
+    }, 2000); // 2 seconds of futuristic ZK scanning
+  };
  
   const handleUploadClick = () => {
     setIsScanning(true);
@@ -209,6 +266,24 @@ export default function ProfilePage() {
         { label: "Quantum", val: "650", pct: "50", color: "#3b82f6", level: "Level 4" },
         { label: "Data Science", val: "50", pct: "10", color: "#8b5cf6", level: "Level 1" }
       ];
+    } else if (isLegal) {
+      return [
+        { label: "IPT Compliance", val: "1.4k", pct: "80", color: "#f43f5e", level: "Level 7" },
+        { label: "Patent Drafting", val: "900", pct: "65", color: "#fda4af", level: "Level 5" },
+        { label: "IP Disputes", val: "300", pct: "30", color: "#fecdd3", level: "Level 3" }
+      ];
+    } else if (isAuditor) {
+      return [
+        { label: "Telemetry Audits", val: "2.2k", pct: "95", color: "#06b6d4", level: "Level 9" },
+        { label: "Data Integrity", val: "1.2k", pct: "75", color: "#22d3ee", level: "Level 6" },
+        { label: "Peer Review", val: "600", pct: "50", color: "#67e8f9", level: "Level 4" }
+      ];
+    } else if (isHardware) {
+      return [
+        { label: "IoT Calibration", val: "1.6k", pct: "85", color: "#ea580c", level: "Level 8" },
+        { label: "Hardware Attestations", val: "1.0k", pct: "70", color: "#fdba74", level: "Level 6" },
+        { label: "Physical Security", val: "400", pct: "40", color: "#ffedd5", level: "Level 3" }
+      ];
     } else {
       return [
         { label: "Data Filtering", val: "700", pct: "55", color: "#3b82f6", level: "Level 5" },
@@ -231,7 +306,7 @@ export default function ProfilePage() {
           <div className="w-32 h-32 rounded-full border-4 border-white shadow-lg overflow-hidden flex items-center justify-center">
             {renderAvatar(profileData.avatar)}
           </div>
-          {(isScientist || isLab) && (
+          {(isScientist || isLab || isLegal || isAuditor || isHardware) && (
             <div className="absolute bottom-0 right-0 p-1.5 bg-white rounded-full shadow-md border border-gray-100">
               <ShieldCheck className="w-5 h-5 text-green-500 animate-pulse" />
             </div>
@@ -255,6 +330,20 @@ export default function ProfilePage() {
             <span className="px-3 py-1 bg-gray-900 text-white text-xs font-bold uppercase tracking-wider rounded-md">
               {roleTitle}
             </span>
+            {role !== "ADMIN" && role !== "NOBEL_LAUREATE" && (
+              <button 
+                onClick={() => {
+                  setUpgradeRoleChoice("");
+                  setUpgradeInputText("");
+                  setUpgradeInputText2("");
+                  setUpgradeState("IDLE");
+                  setShowUpgradeModal(true);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-green-500 to-emerald-600 text-white text-xs font-bold rounded-md hover:from-green-600 hover:to-emerald-700 transition-all shadow-sm cursor-pointer"
+              >
+                <ArrowUpCircle className="w-3.5 h-3.5" /> Upgrade Role / Verify ZK
+              </button>
+            )}
             {isScientist && orcid && (
               <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-medium rounded-md font-mono border border-gray-200">
                 ORCID: {orcid}
@@ -649,7 +738,7 @@ export default function ProfilePage() {
           <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
             <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wider">Identity & ZK-Proofs</h3>
             
-            {!scanSuccess && !isLab && !isScientist ? (
+            {!scanSuccess && !isLab && !isScientist && !isLegal && !isAuditor && !isHardware ? (
               <div 
                 className="border-2 border-dashed border-gray-300 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-gray-50 hover:border-green-400 transition-colors cursor-pointer relative overflow-hidden"
                 onClick={handleUploadClick}
@@ -676,7 +765,14 @@ export default function ProfilePage() {
             ) : (
               <div className="bg-green-50 border border-green-200 rounded-xl p-6 flex flex-col items-center justify-center text-center">
                 <CheckCircle2 className="w-8 h-8 text-green-500 mb-2 animate-bounce" />
-                <p className="text-sm font-bold text-green-900">{isLab ? "Lab Node Certified" : isScientist ? "PhD Scientist Verified" : "Identity Verified"}</p>
+                <p className="text-sm font-bold text-green-900">
+                  {isLab ? "Lab Node Certified" : 
+                   isScientist ? "PhD Scientist Verified" : 
+                   isLegal ? "Legal Practice Verified" : 
+                   isAuditor ? "Auditor Certified" : 
+                   isHardware ? "Hardware Oracle Verified" : 
+                   "Identity Verified"}
+                </p>
                 <p className="text-xs text-green-700">ZK-Credential is active on-chain.</p>
               </div>
             )}
@@ -729,6 +825,237 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+      {/* ROLE UPGRADE MODAL */}
+      <AnimatePresence>
+        {showUpgradeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 relative overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-3">
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <ArrowUpCircle className="w-5 h-5 text-green-600" />
+                  Upgrade Role / Verify Credentials
+                </h3>
+                <button 
+                  onClick={() => setShowUpgradeModal(false)} 
+                  className="text-gray-400 hover:text-gray-700 bg-gray-100 w-8 h-8 rounded-full flex items-center justify-center cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {upgradeState === "IDLE" && (
+                <form onSubmit={handleUpgradeSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Оберіть нову роль</label>
+                    <select
+                      value={upgradeRoleChoice}
+                      onChange={(e) => {
+                        setUpgradeRoleChoice(e.target.value);
+                        setUpgradeInputText("");
+                        setUpgradeInputText2("");
+                      }}
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                      required
+                    >
+                      <option value="">-- Оберіть роль --</option>
+                      {role === "CITIZEN_EXPLORER" && (
+                        <>
+                          <option value="VERIFIED_PHYSICIST">Verified Scientist (PhD/ORCID required)</option>
+                          <option value="LEGAL_AGENT">DeSci Legal / IP Agent (License required)</option>
+                          <option value="INDEPENDENT_AUDITOR">Independent Auditor (Degree/Specialty required)</option>
+                        </>
+                      )}
+                      {role === "VERIFIED_PHYSICIST" && (
+                        <>
+                          <option value="INDEPENDENT_AUDITOR">Independent Auditor (Degree/Specialty required)</option>
+                          <option value="NOBEL_LAUREATE">Nobel Laureate (ZK Proof of Laureate Award)</option>
+                        </>
+                      )}
+                      {role === "MEMBER" && (
+                        <>
+                          <option value="CITIZEN_EXPLORER">Citizen Explorer</option>
+                          <option value="DEVELOPER">Developer (GitHub required)</option>
+                          <option value="COMPANY">Company Sponsor</option>
+                          <option value="LABORATORY">Laboratory Facility</option>
+                        </>
+                      )}
+                      {role !== "MEMBER" && role !== "CITIZEN_EXPLORER" && role !== "VERIFIED_PHYSICIST" && (
+                        <>
+                          <option value="VERIFIED_PHYSICIST">Verified Scientist</option>
+                          <option value="INDEPENDENT_AUDITOR">Independent Auditor</option>
+                          <option value="LEGAL_AGENT">DeSci Legal Agent</option>
+                        </>
+                      )}
+                    </select>
+                  </div>
+
+                  {upgradeRoleChoice === "VERIFIED_PHYSICIST" && (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">ORCID ID для ZK-перевірки</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText}
+                          onChange={(e) => setUpgradeInputText(e.target.value)}
+                          placeholder="e.g. 0000-0002-1825-0097"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {upgradeRoleChoice === "LEGAL_AGENT" && (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Назва патентної фірми / Організації</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText}
+                          onChange={(e) => setUpgradeInputText(e.target.value)}
+                          placeholder="e.g. DeSci IP Counsel LLP"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Номер ліцензії / Патентного повіреного</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText2}
+                          onChange={(e) => setUpgradeInputText2(e.target.value)}
+                          placeholder="e.g. USPTO-Reg-99882"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-rose-500/20"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {upgradeRoleChoice === "INDEPENDENT_AUDITOR" && (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ступінь / Сертифікати для перевірки</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText}
+                          onChange={(e) => setUpgradeInputText(e.target.value)}
+                          placeholder="e.g. PhD in Physics, Senior IEEE Member"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Основна спеціалізація аудиту</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText2}
+                          onChange={(e) => setUpgradeInputText2(e.target.value)}
+                          placeholder="e.g. Cryogenics telemetry verification"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-cyan-500/20"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {upgradeRoleChoice === "HARDWARE_ORACLE" && (
+                    <div className="space-y-4 animate-in fade-in duration-300">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Назва постачальника обладнання</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText}
+                          onChange={(e) => setUpgradeInputText(e.target.value)}
+                          placeholder="e.g. Keithley Instruments Node"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Тип інтерфейсу та приладу</label>
+                        <input
+                          type="text"
+                          value={upgradeInputText2}
+                          onChange={(e) => setUpgradeInputText2(e.target.value)}
+                          placeholder="e.g. GPIB-to-Solana IoT Bridge"
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold shadow hover:shadow-md transition-all bg-gray-950 text-white hover:bg-black rounded-xl mt-4 cursor-pointer"
+                  >
+                    Згенерувати ZK-доказ та оновити
+                  </button>
+                </form>
+              )}
+
+              {upgradeState === "SCANNING" && (
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 font-mono bg-gray-50 border border-gray-100 rounded-xl animate-pulse">
+                  <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                    <Timer className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-900 text-sm">Генерація ZK-доказу...</h4>
+                    <p className="text-xs text-gray-500 mt-1">Перевірка офіційних реєстрів на приватному рівні</p>
+                  </div>
+                </div>
+              )}
+
+              {upgradeState === "SUCCESS" && (
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 bg-green-50 border border-green-200 rounded-xl">
+                  <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white">
+                    <CheckCircle2 className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-green-900 text-sm">Роль успішно оновлено!</h4>
+                    <p className="text-xs text-green-700 mt-1">Оновлені права доступу та SBT-сертифікат активовані.</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowUpgradeModal(false); window.location.reload(); }}
+                    className="py-2 px-6 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    Продовжити
+                  </button>
+                </div>
+              )}
+
+              {upgradeState === "ERROR" && (
+                <div className="py-12 flex flex-col items-center justify-center text-center space-y-4 bg-rose-50 border border-rose-200 rounded-xl">
+                  <div className="w-12 h-12 bg-rose-500 rounded-full flex items-center justify-center text-white">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-rose-900 text-sm">Помилка верифікації</h4>
+                    <p className="text-xs text-rose-700 mt-1">{upgradeError}</p>
+                  </div>
+                  <button
+                    onClick={() => setUpgradeState("IDLE")}
+                    className="py-2 px-6 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all cursor-pointer"
+                  >
+                    Спробувати ще раз
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </section>
   );
 }
