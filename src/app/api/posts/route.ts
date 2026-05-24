@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { title, content, category, tags } = body;
+    const { title, content, category, tags, rewardAmount, rewardType } = body;
 
     if (!title || !content) {
       return NextResponse.json({ error: "Title and content are required" }, { status: 400 });
@@ -102,6 +102,8 @@ export async function POST(req: NextRequest) {
         tags: tagsArray,
         casFlag: hasRestrictedSubstance,
         aiSummary,
+        rewardAmount: rewardAmount ? Number(rewardAmount) : null,
+        rewardType: rewardType || null,
       },
     });
 

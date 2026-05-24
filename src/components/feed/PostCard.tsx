@@ -61,6 +61,8 @@ export function PostCard({
   upvotes = 0,
   casFlag = false,
   aiSummary = null,
+  rewardAmount = null,
+  rewardType = null,
   createdAt,
   onTagClick, 
   onCategoryClick, 
@@ -69,7 +71,7 @@ export function PostCard({
 }: any) {
   const [showComments, setShowComments] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const { isAdmin, isAuthenticated, openAuthModal } = useAuth();
+  const { isAdmin, isAuthenticated, openAuthModal, profileData, role: userRole } = useAuth();
 
   const [votesCount, setVotesCount] = useState(upvotes);
   const [hasVoted, setHasVoted] = useState(false);
@@ -79,6 +81,16 @@ export function PostCard({
   const [tipCurrency, setTipCurrency] = useState<"SOL" | "LVEX">("LVEX");
   const [tipAmount, setTipAmount] = useState("20");
   const [tipTxState, setTipTxState] = useState<"IDLE" | "SIGNING" | "SUCCESS">("IDLE");
+
+  const [volunteerModalOpen, setVolunteerModalOpen] = useState(false);
+  const [volExperience, setVolExperience] = useState("");
+  const [volAvailability, setVolAvailability] = useState("");
+  const [volContacts, setVolContacts] = useState("");
+  const [volTxState, setVolTxState] = useState<"IDLE" | "SENDING" | "SUCCESS">("IDLE");
+  const [volunteers, setVolunteers] = useState([
+    { username: "john_explorer", role: "Citizen Explorer", experience: "2 роки тестування IoT сенсорів. Доступний 10 год/тиждень.", contacts: "john@gmail.com", status: "PENDING" },
+    { username: "dr_mary", role: "Researcher", experience: "Біохімічний бекграунд. Маю домашню лабораторію.", contacts: "mary_bio@labvex.io", status: "ACCEPTED" }
+  ]);
 
   // Keep upvotes count in sync with props
   useEffect(() => {
@@ -198,6 +210,42 @@ export function PostCard({
     }, 500);
   };
 
+  const handleVolunteerClick = () => {
+    if (!isAuthenticated) {
+      openAuthModal();
+      return;
+    }
+    setVolunteerModalOpen(true);
+  };
+
+  const handleSendVolunteerApplication = () => {
+    if (!volExperience || !volContacts) return;
+    setVolTxState("SENDING");
+    setTimeout(() => {
+      setVolunteers(prev => [
+        ...prev,
+        {
+          username: profileData?.name || "me_explorer",
+          role: userRole || "Citizen Explorer",
+          experience: `${volExperience}. Available: ${volAvailability || "Flexible"}`,
+          contacts: volContacts,
+          status: "PENDING"
+        }
+      ]);
+      setVolTxState("SUCCESS");
+    }, 1000);
+  };
+
+  const handleAcceptVolunteer = (username: string) => {
+    setVolunteers(prev => prev.map(v => v.username === username ? { ...v, status: "ACCEPTED" } : v));
+    alert(`Заявку від @${username} прийнято. Ініційовано смарт-контракт утримання нагороди.`);
+  };
+
+  const handleReleaseReward = (username: string) => {
+    setVolunteers(prev => prev.map(v => v.username === username ? { ...v, status: "COMPLETED" } : v));
+    alert(`Винагороду успішно перераховано для @${username}! Транзакцію записано в Solana.`);
+  };
+
   const displayContent = isAuthenticated ? content : content.slice(0, 150) + "...";
 
   const getBadgeColorsAndText = (roleStr: string) => {
@@ -242,6 +290,11 @@ export function PostCard({
               <span className="text-[10px] font-bold bg-green-50 text-green-700 border border-green-200/50 px-1.5 py-0.2 rounded">
                 {authorReputation.toLocaleString()} rep
               </span>
+              {rewardAmount && (
+                <span className="text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200/50 px-1.5 py-0.2 rounded">
+                  🎁 Reward: {rewardAmount} {rewardType}
+                </span>
+              )}
             </div>
             <div className="text-xs text-gray-500 flex flex-wrap items-center gap-2 mt-0.5">
               <span>{dateDisplay}</span>
@@ -354,6 +407,14 @@ export function PostCard({
           <Coins className="w-4 h-4 text-green-600" />
           Tip Author
         </button>
+        {category === "Volunteer Trials" && (
+          <button 
+            onClick={handleVolunteerClick}
+            className="bg-purple-50 text-purple-700 hover:bg-purple-100 px-4 py-2 rounded-lg text-xs font-bold transition-colors flex items-center gap-2 border border-purple-200/50 cursor-pointer"
+          >
+            Apply as Volunteer
+          </button>
+        )}
       </div>
 
       {/* Vexy AI Summary Expandable Box (Symbiosis Feature) */}
@@ -506,6 +567,165 @@ export function PostCard({
           </motion.div>
         )}
       </AnimatePresence>
+ 
+      {/* Volunteer Application Modal */}
+      <AnimatePresence>
+        {volunteerModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 relative overflow-hidden"
+            >
+              <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-3">
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600" />
+                  Apply as Volunteer
+                </h3>
+                <button 
+                  onClick={() => { setVolunteerModalOpen(false); setVolTxState("IDLE"); setVolExperience(""); setVolAvailability(""); setVolContacts(""); }} 
+                  className="text-gray-400 hover:text-gray-700 bg-gray-100 hover:bg-gray-200 w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {volTxState === "IDLE" && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Ваш досвід / навички</label>
+                    <textarea
+                      value={volExperience}
+                      onChange={(e) => setVolExperience(e.target.value)}
+                      placeholder="Опишіть ваш бекграунд, вміння працювати з обладнанням чи досвід в аналогічних дослідах..."
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20 resize-none"
+                      rows={3}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Вільний час (годин/тиждень)</label>
+                    <input
+                      type="text"
+                      value={volAvailability}
+                      onChange={(e) => setVolAvailability(e.target.value)}
+                      placeholder="e.g. 10 годин на тиждень, гнучкий графік"
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Контактні дані</label>
+                    <input
+                      type="text"
+                      value={volContacts}
+                      onChange={(e) => setVolContacts(e.target.value)}
+                      placeholder="e.g. Telegram: @username, Email: ..."
+                      className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500/20"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    disabled={!volExperience || !volContacts}
+                    onClick={handleSendVolunteerApplication}
+                    className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold shadow hover:shadow-md transition-all bg-purple-600 text-white rounded-xl mt-4 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Подати заявку
+                  </button>
+                </div>
+              )}
+
+              {volTxState === "SENDING" && (
+                <div className="py-12 text-center space-y-4">
+                  <div className="w-12 h-12 border-4 border-gray-200 border-t-purple-600 rounded-full animate-spin mx-auto"></div>
+                  <h4 className="font-bold text-gray-900 text-base">Реєстрація заявки у блокчейні...</h4>
+                  <p className="text-xs text-gray-500 font-mono">Matching volunteer parameters with trial profile</p>
+                </div>
+              )}
+
+              {volTxState === "SUCCESS" && (
+                <div className="space-y-6 text-center animate-in zoom-in duration-300 py-4">
+                  <CheckCircle2 className="w-16 h-16 text-purple-600 mx-auto" />
+                  <div>
+                    <h4 className="text-xl font-bold text-gray-900">Заявку успішно надіслано!</h4>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Ваш запит надіслано автору публікації. Ви отримаєте REP-бали за залученість після підтвердження від вченого.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => { setVolunteerModalOpen(false); setVolTxState("IDLE"); setVolExperience(""); setVolAvailability(""); setVolContacts(""); }}
+                    className="w-full py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-bold text-xs rounded-xl transition-all shadow"
+                  >
+                    Awesome
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Scientist Author Section: Volunteer Applications Moderation */}
+      {category === "Volunteer Trials" && isAuthenticated && (profileData?.name === author) && (
+        <div className="mt-4 p-4 bg-purple-50/20 border border-purple-100 rounded-xl space-y-4">
+          <div className="flex justify-between items-center border-b border-purple-100 pb-2">
+            <h4 className="font-bold text-xs text-purple-900 uppercase tracking-wide flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Volunteer Applications Queue
+            </h4>
+            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">
+              {volunteers.filter(v => v.status !== "COMPLETED").length} Active
+            </span>
+          </div>
+
+          <div className="space-y-3">
+            {volunteers.map((vol, index) => (
+              <div key={index} className="bg-white p-3 rounded-lg border border-purple-100/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 text-xs">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 font-bold text-gray-800">
+                    <span>@{vol.username}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 bg-blue-50 text-blue-700 rounded font-normal">{vol.role}</span>
+                    {vol.status === "ACCEPTED" && (
+                      <span className="text-[9px] px-1 bg-amber-55/10 text-amber-700 border border-amber-200 rounded">Escrow Active</span>
+                    )}
+                    {vol.status === "COMPLETED" && (
+                      <span className="text-[9px] px-1 bg-green-55/10 text-green-700 border border-green-200 rounded">Rewarded</span>
+                    )}
+                  </div>
+                  <p className="text-gray-650"><span className="font-semibold text-gray-700">Вимоги/Досвід:</span> {vol.experience}</p>
+                  <p className="text-gray-400 text-[10px]">Контакти: {vol.contacts}</p>
+                </div>
+                <div className="flex gap-2 w-full md:w-auto shrink-0 justify-end">
+                  {vol.status === "PENDING" && (
+                    <button
+                      onClick={() => handleAcceptVolunteer(vol.username)}
+                      className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg cursor-pointer transition-colors text-[10px] uppercase"
+                    >
+                      Accept Application
+                    </button>
+                  )}
+                  {vol.status === "ACCEPTED" && (
+                    <button
+                      onClick={() => handleReleaseReward(vol.username)}
+                      className="px-3 py-1.5 bg-green-650 hover:bg-green-700 bg-green-600 text-white font-bold rounded-lg cursor-pointer transition-colors text-[10px] uppercase"
+                    >
+                      Verify & Release Reward
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <AnimatePresence>
         {showComments && isAuthenticated && (

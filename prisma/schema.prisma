@@ -52,6 +52,8 @@ model Post {
   aiSummary     String?  @map("ai_summary")
   isPinned      Boolean  @default(false) @map("is_pinned")
   casFlag       Boolean  @default(false) @map("cas_flag")
+  rewardAmount  Int?     @map("reward_amount")
+  rewardType    String?  @map("reward_type")
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 

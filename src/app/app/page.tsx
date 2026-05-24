@@ -15,6 +15,8 @@ interface Post {
   upvotes: number;
   casFlag: boolean;
   aiSummary: string | null;
+  rewardAmount?: number | null;
+  rewardType?: string | null;
   createdAt: string;
   author: {
     username: string;
@@ -32,7 +34,8 @@ const defaultCategories = [
   "Bio-Tech",
   "Space Exploration",
   "Fusion Energy",
-  "Anomalous Phenomena"
+  "Anomalous Phenomena",
+  "Volunteer Trials"
 ];
 
 export default function FeedPage() {
@@ -49,6 +52,8 @@ export default function FeedPage() {
   const [category, setCategory] = useState("Propulsion");
   const [customCategory, setCustomCategory] = useState("");
   const [tagsInput, setTagsInput] = useState("");
+  const [rewardAmount, setRewardAmount] = useState("");
+  const [rewardType, setRewardType] = useState("REP");
   
   // Filtering states
   const [activeCategory, setActiveCategory] = useState("ALL");
@@ -121,6 +126,8 @@ export default function FeedPage() {
           content,
           category: finalCategory,
           tags: tagsInput,
+          rewardAmount: finalCategory === "Volunteer Trials" ? Number(rewardAmount) : null,
+          rewardType: finalCategory === "Volunteer Trials" ? rewardType : null,
         }),
       });
 
@@ -129,6 +136,8 @@ export default function FeedPage() {
         setContent("");
         setTagsInput("");
         setCustomCategory("");
+        setRewardAmount("");
+        setRewardType("REP");
         if (category === "CUSTOM") {
           setCategory(finalCategory);
         }
@@ -287,6 +296,33 @@ export default function FeedPage() {
             </div>
           </div>
 
+          {category === "Volunteer Trials" && (
+            <div className="grid grid-cols-2 gap-4 bg-purple-50/20 p-4 border border-purple-100/50 rounded-xl animate-in slide-in-from-top duration-200">
+              <div>
+                <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Нагорода волонтерам</label>
+                <input 
+                  type="number" 
+                  value={rewardAmount}
+                  onChange={(e) => setRewardAmount(e.target.value)}
+                  placeholder="e.g. 100"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-purple-700 uppercase tracking-wider mb-2">Тип нагороди</label>
+                <select
+                  value={rewardType}
+                  onChange={(e) => setRewardType(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-colors cursor-pointer"
+                >
+                  <option value="REP">REP (Reputation Points)</option>
+                  <option value="LVEX">LVEX (Utility Tokens)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           <div>
             <textarea
               value={content}
@@ -391,6 +427,8 @@ export default function FeedPage() {
               upvotes={post.upvotes}
               casFlag={post.casFlag}
               aiSummary={post.aiSummary}
+              rewardAmount={post.rewardAmount}
+              rewardType={post.rewardType}
               createdAt={post.createdAt}
               onTagClick={(tag: string) => setActiveTag(tag)}
               onCategoryClick={(cat: string) => setActiveCategory(cat)}

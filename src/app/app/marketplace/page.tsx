@@ -20,6 +20,16 @@ interface AIAgent {
   status: "ONLINE" | "BUSY";
 }
 
+interface DeveloperService {
+  id: string;
+  name: string;
+  desc: string;
+  priceUSDC: number;
+  priceLVEX: number;
+  type: string;
+  author: string;
+}
+
 interface LabCapacity {
   id: string;
   name: string;
@@ -57,7 +67,7 @@ interface ModerationRequest {
     displayName: string | null;
     role: string;
   };
-  category: "AI" | "LAAS" | "GOODS";
+  category: "AI" | "LAAS" | "GOODS" | "SERVICES";
   title: string;
   status: "PENDING" | "APPROVED" | "REJECTED";
   data: any;
@@ -67,11 +77,63 @@ interface ModerationRequest {
 const initialAiAgents: AIAgent[] = [];
 const initialLabs: LabCapacity[] = [];
 const initialProducts: PhysicalProduct[] = [];
-const initialIpts: IPToken[] = [];
+const initialIpts: IPToken[] = [
+  { 
+    id: "ipt-1", 
+    title: "CRISPR Base Editor Variant 4b (Off-Target Reduction)", 
+    author: "genetics_mapper", 
+    progress: 85, 
+    raised: 425000, 
+    goal: 500000, 
+    royalty: 4.5, 
+    participants: 142 
+  },
+  { 
+    id: "ipt-2", 
+    title: "Cyclic OSK Expression Protocol for Murine Models", 
+    author: "dr_chen_lab", 
+    progress: 30, 
+    raised: 150000, 
+    goal: 500000, 
+    royalty: 6.0, 
+    participants: 38 
+  },
+  { 
+    id: "ipt-3", 
+    title: "Non-Hallucinogenic Ibogaine Analog (Synthesis Pathway)", 
+    author: "neuro_synthesis", 
+    progress: 100, 
+    raised: 1200000, 
+    goal: 1200000, 
+    royalty: 3.0, 
+    participants: 310 
+  },
+];
+const initialServices: DeveloperService[] = [
+  {
+    id: "srv-1",
+    name: "Solana Smart Contract Development",
+    desc: "Розробка, аудит та інтеграція Rust/Anchor смарт-контрактів для DeSci проектів та IPT-токенізації.",
+    priceUSDC: 1200,
+    priceLVEX: 5400,
+    type: "Smart Contracts",
+    author: "solana_pro"
+  },
+  {
+    id: "srv-2",
+    name: "AI Agent Custom Sandbox Integration",
+    desc: "Створення та конфігурація індивідуальних Docker-контейнерів для автономних агентів із підключенням до LLM.",
+    priceUSDC: 800,
+    priceLVEX: 3600,
+    type: "AI & Devops",
+    author: "agent_architect"
+  }
+];
+
 
 export default function MarketplacePage() {
   const { isAuthenticated, openAuthModal, role, isAdmin, profileData } = useAuth();
-  const [activeCategory, setActiveCategory] = useState<"ALL" | "IPT" | "AI" | "LAAS" | "GOODS">("ALL");
+  const [activeCategory, setActiveCategory] = useState<"ALL" | "IPT" | "AI" | "LAAS" | "GOODS" | "SERVICES">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [mounted, setMounted] = useState(false);
@@ -79,6 +141,7 @@ export default function MarketplacePage() {
   const [labs, setLabs] = useState<LabCapacity[]>(initialLabs);
   const [products, setProducts] = useState<PhysicalProduct[]>(initialProducts);
   const [ipts, setIpts] = useState<IPToken[]>(initialIpts);
+  const [services, setServices] = useState<DeveloperService[]>(initialServices);
   const [moderationQueue, setModerationQueue] = useState<ModerationRequest[]>([]);
 
   // Modals state
@@ -100,6 +163,17 @@ export default function MarketplacePage() {
   const [shippingAddress, setShippingAddress] = useState("");
   const [buyTxState, setBuyTxState] = useState<"IDLE" | "SIGNING" | "CONFIRMING" | "SUCCESS">("IDLE");
 
+  // Custom dev request state
+  const [customRequest, setCustomRequest] = useState<DeveloperService | null>(null);
+  const [customSpecs, setCustomSpecs] = useState("");
+  const [customBudget, setCustomBudget] = useState("");
+  const [customTxState, setCustomTxState] = useState<"IDLE" | "SENDING" | "SUCCESS">("IDLE");
+
+  // IPT investment state
+  const [investIpt, setInvestIpt] = useState<IPToken | null>(null);
+  const [investQty, setInvestQty] = useState(10);
+  const [investTxState, setInvestTxState] = useState<"IDLE" | "SIGNING" | "SUCCESS">("IDLE");
+
   // Submit Modal state
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [submitName, setSubmitName] = useState("");
@@ -111,6 +185,7 @@ export default function MarketplacePage() {
   const [submitSpecs, setSubmitSpecs] = useState("");
   const [submitPriceSOL, setSubmitPriceSOL] = useState("");
   const [submitStock, setSubmitStock] = useState("");
+  const [devSubmitType, setDevSubmitType] = useState<"AI" | "SERVICES">("AI");
 
   const fetchSubmissions = async () => {
     try {
@@ -126,10 +201,12 @@ export default function MarketplacePage() {
         const approvedAI = approvedSubmissions.filter((s: any) => s.category === "AI").map((s: any) => s.data);
         const approvedLaas = approvedSubmissions.filter((s: any) => s.category === "LAAS").map((s: any) => s.data);
         const approvedGoods = approvedSubmissions.filter((s: any) => s.category === "GOODS").map((s: any) => s.data);
+        const approvedServices = approvedSubmissions.filter((s: any) => s.category === "SERVICES").map((s: any) => s.data);
 
         setAiAgents([...initialAiAgents, ...approvedAI]);
         setLabs([...initialLabs, ...approvedLaas]);
         setProducts([...initialProducts, ...approvedGoods]);
+        setServices([...initialServices, ...approvedServices]);
       }
     } catch (e) {
       console.error("Failed to load submissions", e);
@@ -153,19 +230,32 @@ export default function MarketplacePage() {
     if (!submitName || !submitDesc || !submitPriceUSDC) return;
 
     let offerData: any = {};
-    let offerType: "AI" | "LAAS" | "GOODS" = "GOODS";
+    let offerType: "AI" | "LAAS" | "GOODS" | "SERVICES" = "GOODS";
 
     if (role === "DEVELOPER") {
-      offerType = "AI";
-      offerData = {
-        id: `ai-${Date.now()}`,
-        name: submitName,
-        desc: submitDesc,
-        priceUSDC: Number(submitPriceUSDC),
-        priceLVEX: Number(submitPriceLVEX) || Math.round(Number(submitPriceUSDC) * 4.5),
-        type: submitAgentType || "AI Model",
-        status: "ONLINE"
-      };
+      if (devSubmitType === "AI") {
+        offerType = "AI";
+        offerData = {
+          id: `ai-${Date.now()}`,
+          name: submitName,
+          desc: submitDesc,
+          priceUSDC: Number(submitPriceUSDC),
+          priceLVEX: Number(submitPriceLVEX) || Math.round(Number(submitPriceUSDC) * 4.5),
+          type: submitAgentType || "AI Model",
+          status: "ONLINE"
+        };
+      } else {
+        offerType = "SERVICES";
+        offerData = {
+          id: `srv-${Date.now()}`,
+          name: submitName,
+          desc: submitDesc,
+          priceUSDC: Number(submitPriceUSDC),
+          priceLVEX: Number(submitPriceLVEX) || Math.round(Number(submitPriceUSDC) * 4.5),
+          type: submitAgentType || "Custom Dev Service",
+          author: profileData?.name || "developer"
+        };
+      }
     } else if (role === "LABORATORY") {
       offerType = "LAAS";
       offerData = {
@@ -327,6 +417,7 @@ export default function MarketplacePage() {
   const filteredLabs = labs.filter(l => l.name.toLowerCase().includes(searchQuery.toLowerCase()) || l.desc.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.desc.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredIpts = ipts.filter(i => i.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredServices = services.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.desc.toLowerCase().includes(searchQuery.toLowerCase()));
 
   // Formatter for Currency
   const formatNumber = (num: number) => {
@@ -372,8 +463,8 @@ export default function MarketplacePage() {
       </div>
 
       {/* Category Tabs */}
-      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl max-w-lg">
-        {(["ALL", "IPT", "AI", "LAAS", "GOODS"] as const).map(tab => (
+      <div className="flex gap-2 p-1 bg-gray-100 rounded-xl max-w-xl">
+        {(["ALL", "IPT", "AI", "LAAS", "GOODS", "SERVICES"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setActiveCategory(tab)}
@@ -384,6 +475,7 @@ export default function MarketplacePage() {
             {tab === "AI" && "AI Agents"}
             {tab === "LAAS" && "Lab Slots"}
             {tab === "GOODS" && "Products"}
+            {tab === "SERVICES" && "Services"}
           </button>
         ))}
       </div>
@@ -421,6 +513,7 @@ export default function MarketplacePage() {
                         {req.category === "AI" && "🤖 AI Agent"}
                         {req.category === "LAAS" && "🔬 LaaS Capacity"}
                         {req.category === "GOODS" && "📦 Product/Material"}
+                        {req.category === "SERVICES" && "🛠️ Programming Service"}
                       </span>
                       <span className="text-[10px] text-gray-400">Від:</span>
                       <span className="text-xs font-bold text-gray-800">{req.author.displayName || req.author.username}</span>
@@ -452,6 +545,13 @@ export default function MarketplacePage() {
                           <div><span className="text-gray-400">Ціна USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC}</strong></div>
                           <div><span className="text-gray-400">Ціна SOL:</span> <strong className="text-gray-700">{req.data.priceSOL}</strong></div>
                           <div className="col-span-2"><span className="text-gray-400">Наявність:</span> <strong className="text-gray-700">{req.data.stock}</strong></div>
+                        </>
+                      )}
+                      {req.category === "SERVICES" && (
+                        <>
+                          <div><span className="text-gray-400">Бюджет від USDC:</span> <strong className="text-gray-700">{req.data.priceUSDC}</strong></div>
+                          <div><span className="text-gray-400">Бюджет від LVEX:</span> <strong className="text-gray-700">{req.data.priceLVEX}</strong></div>
+                          <div className="col-span-2"><span className="text-gray-400">Спеціалізація:</span> <strong className="text-gray-700">{req.data.type}</strong></div>
                         </>
                       )}
                     </div>
@@ -572,7 +672,7 @@ export default function MarketplacePage() {
                   <div className="flex justify-between items-center border-t border-gray-100 pt-4 mt-6">
                     <span className="text-xs text-gray-400">{ipt.participants} інвесторів</span>
                     <button 
-                      onClick={() => alert(`Fund simulation triggered for ${ipt.title}`)}
+                      onClick={() => setInvestIpt(ipt)}
                       className="px-3.5 py-1.5 bg-gray-900 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-colors"
                     >
                       Fund Research
@@ -723,6 +823,54 @@ export default function MarketplacePage() {
                       className="py-2.5 px-6 bg-amber-500 text-white rounded-xl font-bold text-xs hover:bg-amber-600 shadow-sm hover:shadow transition-all w-full md:w-auto mt-2 cursor-pointer"
                     >
                       Buy Now
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 4. DEVELOPER SERVICES SECTION */}
+        {(activeCategory === "ALL" || activeCategory === "SERVICES") && filteredServices.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+            <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center text-green-600">
+                <Hammer className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Custom Dev Services (Послуги розробників)</h3>
+                <p className="text-xs text-gray-500">Замовлення індивідуального програмування та розробки під ключ від перевірених спеціалістів</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {filteredServices.map(srv => (
+                <div key={srv.id} className="p-5 border border-gray-100 rounded-2xl hover:border-green-500/30 hover:bg-green-50/10 transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div className="space-y-1.5 max-w-xl">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-bold text-gray-900">{srv.name}</h4>
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                        {srv.type}
+                      </span>
+                      <span className="text-[10px] text-gray-400">Розробник:</span>
+                      <span className="text-xs font-bold text-gray-800">@{srv.author}</span>
+                    </div>
+                    <p className="text-sm text-gray-600">{srv.desc}</p>
+                  </div>
+
+                  <div className="flex flex-col md:items-end gap-2 shrink-0 w-full md:w-auto">
+                    <div className="text-sm text-gray-500 font-medium">
+                      Бюджет від: <span className="font-bold text-gray-900 text-base">{srv.priceUSDC} USDC</span>
+                    </div>
+                    <div className="text-xs text-green-600 font-bold flex items-center gap-1">
+                      <Coins className="w-3.5 h-3.5" /> або {srv.priceLVEX} LVEX
+                    </div>
+                    <button
+                      onClick={() => setCustomRequest(srv)}
+                      className="py-2 px-6 bg-green-600 hover:bg-green-700 text-white font-bold text-xs rounded-xl shadow-sm hover:shadow transition-all w-full md:w-auto mt-2 cursor-pointer"
+                    >
+                      Request Custom Build
                     </button>
                   </div>
                 </div>
@@ -1133,6 +1281,227 @@ export default function MarketplacePage() {
         )}
       </AnimatePresence>
 
+      {/* MODAL 4: CUSTOM DEV REQUEST */}
+      <AnimatePresence>
+        {customRequest && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <Terminal className="w-5 h-5 text-green-600" />
+                  Request Custom Build
+                </h3>
+                <button 
+                  onClick={() => { setCustomRequest(null); setCustomTxState("IDLE"); setCustomSpecs(""); setCustomBudget(""); }} 
+                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-6">
+                {customTxState === "IDLE" && (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="text-xs text-gray-400 font-semibold mb-1">Замовлення послуги у @{customRequest.author}</div>
+                      <h4 className="font-bold text-gray-900 text-base">{customRequest.name}</h4>
+                      <p className="text-xs text-gray-500 mt-1">{customRequest.desc}</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Технічні вимоги (ТЗ)</label>
+                      <textarea
+                        value={customSpecs}
+                        onChange={(e) => setCustomSpecs(e.target.value)}
+                        placeholder="Опишіть детально ваше завдання, стек та очікуваний результат..."
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm resize-none"
+                        rows={4}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Запропонований бюджет (USDC)</label>
+                      <input
+                        type="number"
+                        value={customBudget}
+                        onChange={(e) => setCustomBudget(e.target.value)}
+                        placeholder={`Мінімум: ${customRequest.priceUSDC} USDC`}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-sm"
+                        required
+                      />
+                    </div>
+
+                    <button 
+                      disabled={!customSpecs || !customBudget}
+                      onClick={() => {
+                        setCustomTxState("SENDING");
+                        setTimeout(() => {
+                          setCustomTxState("SUCCESS");
+                        }, 1000);
+                      }}
+                      className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold text-sm rounded-xl shadow-md disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      Надіслати запит розробнику
+                    </button>
+                  </div>
+                )}
+
+                {customTxState === "SENDING" && (
+                  <div className="py-12 text-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-gray-200 border-t-green-600 rounded-full animate-spin mx-auto"></div>
+                    <h4 className="font-bold text-gray-900 text-base">Надсилання запиту розробнику...</h4>
+                    <p className="text-xs text-gray-500 font-mono">Створення замовлення в смарт-контракті Escrow</p>
+                  </div>
+                )}
+
+                {customTxState === "SUCCESS" && (
+                  <div className="space-y-6 text-center animate-in zoom-in duration-300">
+                    <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto text-white shadow-lg">
+                      <CheckCircle2 className="w-10 h-10" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900">Запит надіслано!</h4>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Ваш запит на індивідуальну розробку успішно надіслано розробнику **@{customRequest.author}**.
+                        Ви отримаєте сповіщення в системі, коли розробник прийме ТЗ та ініціює смарт-контракт.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => { setCustomRequest(null); setCustomTxState("IDLE"); setCustomSpecs(""); setCustomBudget(""); }}
+                      className="w-full py-2.5 bg-gray-950 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+                    >
+                      Чудово
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 5: IPT INVESTMENT */}
+      <AnimatePresence>
+        {investIpt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="bg-gray-50 border-b border-gray-100 p-6 flex justify-between items-center">
+                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <CoinsIcon className="w-5 h-5 text-amber-600" />
+                  Invest in IP Fraction (IPT)
+                </h3>
+                <button 
+                  onClick={() => { setInvestIpt(null); setInvestTxState("IDLE"); setInvestQty(10); }} 
+                  className="text-gray-400 hover:text-gray-700 bg-white border border-gray-100 w-8 h-8 rounded-full flex items-center justify-center shadow-sm cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-6">
+                {investTxState === "IDLE" && (
+                  <div className="space-y-6">
+                    <div>
+                      <div className="text-xs text-gray-400 font-semibold mb-1">Власник патенту: @{investIpt.author}</div>
+                      <h4 className="font-bold text-gray-900 text-base">{investIpt.title}</h4>
+                      <p className="text-xs text-gray-500 mt-1">Ви купуєте фракційні токени патенту, що дають право на частку від майбутніх роялті ({investIpt.royalty}%).</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Кількість часток (IPT Tokens)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={investQty}
+                        onChange={(e) => setInvestQty(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-gray-905 focus:outline-none focus:ring-2 focus:ring-amber-500/20 text-sm"
+                      />
+                    </div>
+
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-150/50 space-y-2 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Ціна за 1 IPT:</span>
+                        <span className="font-bold text-gray-900">10 USDC</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Очікуване роялті:</span>
+                        <span className="font-bold text-gray-955">{((investIpt.royalty / 100) * (investQty / 10000) * 100).toFixed(4)}% від роялті</span>
+                      </div>
+                      <div className="flex justify-between border-t border-gray-200 pt-2 text-sm font-semibold">
+                        <span className="text-gray-900">Загальна вартість:</span>
+                        <span className="text-gray-900">{investQty * 10} USDC</span>
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={() => {
+                        setInvestTxState("SIGNING");
+                        setTimeout(() => {
+                          setInvestTxState("SUCCESS");
+                        }, 1000);
+                      }}
+                      className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold text-sm rounded-xl shadow-md cursor-pointer"
+                    >
+                      Підтвердити транзакцію купівлі
+                    </button>
+                  </div>
+                )}
+
+                {investTxState === "SIGNING" && (
+                  <div className="py-12 text-center space-y-4">
+                    <div className="w-12 h-12 border-4 border-gray-200 border-t-amber-500 rounded-full animate-spin mx-auto"></div>
+                    <h4 className="font-bold text-gray-900 text-base">Signing Contract Call via Phantom...</h4>
+                    <p className="text-xs text-gray-500 font-mono">Executing minting of {investQty} IPT tokens</p>
+                  </div>
+                )}
+
+                {investTxState === "SUCCESS" && (
+                  <div className="space-y-6 text-center animate-in zoom-in duration-300">
+                    <div className="w-16 h-16 bg-amber-500 rounded-full flex items-center justify-center mx-auto text-white shadow-lg">
+                      <CheckCircle2 className="w-10 h-10" />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-gray-900">IPT Tokens Minted!</h4>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Ви успішно придбали **{investQty} часток** у патенті. 
+                        Транзакцію записано в Solana Explorer. Ваша репутація збільшена на **+{Math.round(investQty * 0.5)} REP**!
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => { setInvestIpt(null); setInvestTxState("IDLE"); setInvestQty(10); }}
+                      className="w-full py-2.5 bg-gray-950 hover:bg-black text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+                    >
+                      Повернутись
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* SUBMIT OFFER MODAL */}
       <AnimatePresence>
         {showSubmitModal && (
@@ -1162,6 +1531,28 @@ export default function MarketplacePage() {
               </div>
 
               <form onSubmit={handleSubmitOffer} className="space-y-4">
+                {role === "DEVELOPER" && (
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Тип пропозиції</label>
+                    <div className="grid grid-cols-2 gap-2 bg-gray-100 p-1 rounded-xl mb-4">
+                      <button
+                        type="button"
+                        onClick={() => setDevSubmitType("AI")}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${devSubmitType === 'AI' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                      >
+                        AI Agent
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDevSubmitType("SERVICES")}
+                        className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${devSubmitType === 'SERVICES' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                      >
+                        Dev Service
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Назва послуги / товару</label>
                   <input
@@ -1242,12 +1633,14 @@ export default function MarketplacePage() {
 
                 {role === "DEVELOPER" && (
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Категорія AI-агента</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
+                      {devSubmitType === "AI" ? "Категорія AI-агента" : "Спеціалізація (Категорія розробки)"}
+                    </label>
                     <input
                       type="text"
                       value={submitAgentType}
                       onChange={(e) => setSubmitAgentType(e.target.value)}
-                      placeholder="e.g. Data Analysis, Compliance"
+                      placeholder={devSubmitType === "AI" ? "e.g. Data Analysis, Compliance" : "e.g. Smart Contracts, Web3 Frontend"}
                       className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-955 focus:outline-none focus:ring-2 focus:ring-green-500/20"
                     />
                   </div>
